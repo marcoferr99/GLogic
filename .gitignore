@@ -1,0 +1,8 @@
+*.aux
+*.glob
+*.swp
+*.vo
+*.vok
+*.vos
+.CoqMakefile.d
+unused/
