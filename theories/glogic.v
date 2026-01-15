@@ -25,15 +25,17 @@ Check |( []; [] --> [] :> 0 )|.
 
 Inductive def : sequent -> Prop :=
   | ax_init (sig : list ty) (j : judgement) (gam : list judgement) :
-      def |( sig; j :: gam --> j )|
+    def |( sig; j :: gam --> j )|
   | ax_cut (sig : list ty) (del gam : list judgement) (b c : judgement) :
-      def |( sig; del --> b )| -> def |( sig; b :: gam --> c )| ->
-      def |( sig; del ++ gam --> c )|
+    def |( sig; del --> b )| -> def |( sig; b :: gam --> c )| ->
+    def |( sig; del ++ gam --> c )|
   | ax_cL (sig : list ty) (gam : list judgement) (b c : judgement) :
-      def |( sig; b :: b :: gam --> c )| -> def |( sig; b :: gam --> c )|
+    def |( sig; b :: b :: gam --> c )| -> def |( sig; b :: gam --> c )|
   | ax_wL (sig : list ty) (gam : list judgement) (b c : judgement) :
-      def |( sig; gam --> c )| -> def |( sig; b :: gam --> c )|
-  | ax_botL (sig : list ty) (gam : list judgement) (b c : judgement) :
+    def |( sig; gam --> c )| -> def |( sig; b :: gam --> c )|
+  | ax_botL
+    (sig : list ty) (gam : list judgement) (b : judgement) (s : list ty) :
+    def |( sig; (s :> _|) :: gam --> b)|
 .
 
 Declare Custom Entry stlc_test.
