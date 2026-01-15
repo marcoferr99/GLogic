@@ -36,6 +36,9 @@ Inductive def : sequent -> Prop :=
   | ax_botL
     (sig : list ty) (gam : list judgement) (b : judgement) (s : list ty) :
     def |( sig; (s :> _|) :: gam --> b)|
+  | ax_topR
+    (sig : list ty) (gam : list judgement) (s : list ty) :
+    def |( sig; gam --> s :> ^| )|
 .
 
 Declare Custom Entry stlc_test.

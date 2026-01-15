@@ -49,7 +49,8 @@ Inductive tm : Set :=
   | tm_lvl : nat -> tm
   | tm_app : tm -> tm -> tm
   | tm_abs : ty -> tm -> tm
-  | tm_bot : tm.
+  | tm_bot : tm
+  | tm_top : tm.
 
 (** Notations *)
 
@@ -68,6 +69,8 @@ Notation "\: A , t" := (tm_abs A t)
   (in custom stlc_tm at level 200, A custom stlc_ty,
   t custom stlc_tm at level 200, left associativity) : stlc_scope.
 Notation "_|" := (tm_bot)
+  (in custom stlc_tm at level 0) : stlc_scope.
+Notation "^|" := (tm_top)
   (in custom stlc_tm at level 0) : stlc_scope.
 Coercion tm_lvl : nat >-> tm.
 
@@ -90,7 +93,8 @@ Inductive has_type : list ty -> tm -> ty -> Prop :=
       has_type gam t1 <[ T2 -> T1 ]> ->
       has_type gam t2 T2 ->
       has_type gam <{ t1 t2 }> T1
-  | T_Bot gam : has_type gam tm_bot ty_proposition.
+  | T_Bot gam : has_type gam tm_bot ty_proposition
+  | T_Top gam : has_type gam tm_top ty_proposition.
 
 (** Notations *)
 
