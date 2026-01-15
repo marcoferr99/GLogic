@@ -48,7 +48,8 @@ Check <[ (o -> i) -> o ]>.
 Inductive tm : Set :=
   | tm_lvl : nat -> tm
   | tm_app : tm -> tm -> tm
-  | tm_abs : ty -> tm -> tm.
+  | tm_abs : ty -> tm -> tm
+  | tm_bot : tm.
 
 (** Notations *)
 
@@ -66,6 +67,8 @@ Notation "x y" := (tm_app x y)
 Notation "\: A , t" := (tm_abs A t)
   (in custom stlc_tm at level 200, A custom stlc_ty,
   t custom stlc_tm at level 200, left associativity) : stlc_scope.
+Notation "_|" := (tm_bot)
+  (in custom stlc_tm at level 0) : stlc_scope.
 Coercion tm_lvl : nat >-> tm.
 
 (** Examples *)
@@ -86,7 +89,8 @@ Inductive has_type : list ty -> tm -> ty -> Prop :=
   | T_App : forall T1 T2 gam t1 t2,
       has_type gam t1 <[ T2 -> T1 ]> ->
       has_type gam t2 T2 ->
-      has_type gam <{ t1 t2 }> T1.
+      has_type gam <{ t1 t2 }> T1
+  | T_Bot gam : has_type gam tm_bot ty_proposition.
 
 (** Notations *)
 
@@ -94,6 +98,7 @@ Infix "++" := app
   (in custom stlc_ty at level 60, right associativity) : stlc_scope.
 Infix "::" := cons (in custom stlc_ty at level 60, right associativity) : stlc_scope.
 Notation "[ ]" := nil (in custom stlc_ty, format "[ ]") : stlc_scope.
+Notation "[ x ]" := (cons x nil) (in custom stlc_ty) : stlc_scope.
 Notation "[ x ; y ; .. ; z ]" := (cons x (cons y .. (cons z nil) ..))
   (in custom stlc_ty,
   format "[ '[' x ;  '/' y ;  '/' .. ;  '/' z ']' ]") : stlc_scope.
@@ -120,6 +125,9 @@ Proof.
   - apply T_Var. simpl. reflexivity.
 Qed.
 
+Theorem ex4 : <| [] |- \: i, _| : i -> o |>.
+Proof.  apply T_Abs. simpl. apply T_Bot. Qed.
+
 
 (********************)
 (** ** Substitution *)
@@ -131,6 +139,7 @@ Fixpoint incr (t : tm) : tm :=
   | tm_lvl n => tm_lvl (S n)
   | tm_app t1 t2 => tm_app (incr t1) (incr t2)
   | tm_abs T t1 => tm_abs T (incr t1)
+  | x => x
   end.
 
 Reserved Notation "[ x := s ] t"
@@ -141,6 +150,7 @@ Fixpoint subst (x : nat) (s : tm) (t : tm) : tm :=
   | tm_lvl n => if Nat.eqb n x then s else t
   | <{ t1 t2 }> => <{ [x:=s]t1 [x:=s]t2 }>
   | <{ \: T, t1 }> => <{ \: T, [x := $(incr s)] t1 }>
+  | x => x
   end
 where "[ x := s ] t" := (subst x s t) (in custom stlc_tm) : stlc_scope.
 
