@@ -46,7 +46,7 @@ Check <[ (o -> i) -> o ]>.
 
 (** Terms using de Bruijn levels *)
 Inductive tm : Set :=
-  | tm_level : nat -> tm
+  | tm_lvl : nat -> tm
   | tm_app : tm -> tm -> tm
   | tm_abs : ty -> tm -> tm.
 
@@ -66,7 +66,7 @@ Notation "x y" := (tm_app x y)
 Notation "\: A , t" := (tm_abs A t)
   (in custom stlc_tm at level 200, A custom stlc_ty,
   t custom stlc_tm at level 200, left associativity) : stlc_scope.
-Coercion tm_level : nat >-> tm.
+Coercion tm_lvl : nat >-> tm.
 
 (** Examples *)
 Check <{ \: i, 1 }>.
@@ -128,7 +128,7 @@ Qed.
 (** Increase the levels in a term by 1 *)
 Fixpoint incr (t : tm) : tm :=
   match t with
-  | tm_level n => tm_level (S n)
+  | tm_lvl n => tm_lvl (S n)
   | tm_app t1 t2 => tm_app (incr t1) (incr t2)
   | tm_abs T t1 => tm_abs T (incr t1)
   end.
@@ -138,7 +138,7 @@ Reserved Notation "[ x := s ] t"
   t custom stlc_tm at next level, right associativity).
 Fixpoint subst (x : nat) (s : tm) (t : tm) : tm :=
   match t with
-  | tm_level n => if Nat.eqb n x then s else t
+  | tm_lvl n => if Nat.eqb n x then s else t
   | <{ t1 t2 }> => <{ [x:=s]t1 [x:=s]t2 }>
   | <{ \: T, t1 }> => <{ \: T, [x := $(incr s)] t1 }>
   end
