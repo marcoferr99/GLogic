@@ -1,0 +1,171 @@
+\documentclass[a4paper]{article}
+
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage[english]{babel}
+
+\usepackage[autostyle]{csquotes}     % Required by biblatex
+\usepackage[backend=biber]{biblatex}
+\addbibresource{bibliography.bib}
+
+\usepackage{amsthm}
+\usepackage{mathtools}
+\usepackage{mathpartir}
+
+\usepackage[colorlinks]{hyperref}
+
+
+\theoremstyle{definition}
+\newtheorem{definition}{Definition}
+
+
+\newcommand*{\lvln}{n}
+\newcommand*{\inddef}[2]{#1 \; \coloneq \; #2}
+\newcommand*{\tyarr}[2]{#1 \rightarrow #2}
+\newcommand*{\typrp}{o}
+\newcommand*{\tyind}{i}
+\newcommand*{\tmapp}[2]{#1 \, #2}
+\newcommand*{\tmabs}[2]{\lambda \colon #1, \, #2}
+\newcommand*{\hastype}[3]{#1 \vdash #2 : #3}
+\newcommand*{\nth}[2]{#1_{#2}}
+\newcommand*{\listappel}[2]{#1 \, #2}
+\newcommand*{\listdelim}[1]{[#1]}
+\newcommand*{\listsep}{; \,}
+\newcommand*{\judgement}[2]{#1 \triangleright #2}
+\newcommand*{\sequent}[3]{#1; #2 \longrightarrow #3}
+\newcommand*{\listcons}[2]{#1, #2}
+\newcommand*{\listapp}[2]{#1 \, #2}
+\newcommand*{\listempty}{[\;]}
+
+
+\begin{document}
+
+
+\section{Simply Typed Lambda Calculus}
+
+
+\subsection{Syntax}
+
+Taking inspiration from \cite{church:types} and \cite{pierce:plf} we define the types of the simply typed lambda calculus as:
+\[
+    \inddef{T}{\typrp \mid \tyind \mid \tyarr{T}{T}}
+\]
+That is, $\typrp$ is a type, $\tyind$ is a type and given two types $A$ and $B$, the expression $A \rightarrow B$ is also a type.
+The type $\typrp$ represents the type of propositions, $\tyind$ represents the type of individuals and $A \rightarrow B$ represents the type of functions from $A$ to $B$.
+
+Some examples:
+\[
+    \typrp \qquad
+    \tyarr{\typrp}{\tyind} \qquad
+    \tyarr{\typrp}{\tyarr{\tyind}{\typrp}} \qquad
+    \tyarr{(\tyarr{\typrp}{\tyind})}{\typrp}
+\]
+We consider $\tyarr{}{}$ to be right associative, and thus $\tyarr{\typrp}{\tyarr{\tyind}{\typrp}}$ is the same as $\tyarr{\typrp}{(\tyarr{\tyind}{\typrp})}$.
+
+We define the terms of the simply typed lambda calculus (using the Bruijn levels) as:
+\[
+    \inddef{t}{\lvln \mid \tmapp{t}{t} \mid \tmabs{T}{t} \mid \bot \mid \top}
+\]
+where $\lvln$ is a natural number and $T$ is a type.
+
+Some examples:
+\[
+    \tmabs{\tyind}{0} \qquad
+    \tmapp{(\tmabs{\tyarr{\tyind}{\typrp}}{2})}{1} \qquad
+    \tmabs{\typrp}{\tmapp{3}{\bot}} \qquad
+    \tmabs{\tyarr{\typrp}{\typrp}}{\tmabs{\tyind}{\tmapp{0}{\top}}}
+\]
+
+
+\subsection{Typing}
+
+Given a list of types $\Gamma$, a natural number $n$ and a type $T$, we denote the $n$-th element of $\Gamma$ by $\nth{\Gamma}{n}$ and the list constructed by appending the element $T$ to the end of $\Gamma$ as $\listappel{\Gamma}{T}$.
+
+\begin{definition}
+    Given a list of types $\Gamma$, a term $t$ and a type $T$, we define the proposition $\hastype{\Gamma}{t}{T}$ by the following inference rules:
+    \begin{gather*}
+        \inferrule{ }{\hastype{\Gamma}{\lvln}{T}} \quad \text{if $\nth{\Gamma}{\lvln} = T$} \\
+        %
+        \inferrule{\hastype{\Gamma}{s}{\tyarr{A}{B}} \\ \hastype{\Gamma}{t}{A}}{\hastype{\Gamma}{\tmapp{s}{t}}{B}} \\
+        %
+        \inferrule{\hastype{\listappel{\Gamma}{A}}{s}{B}}{\hastype{\Gamma}{\tmabs{A}{s}}{\tyarr{A}{B}}} \\
+        %
+        \inferrule{ }{\hastype{\Gamma}{\bot}{\typrp}} \qquad
+        \inferrule{ }{\hastype{\Gamma}{\top}{\typrp}}
+    \end{gather*}
+    If the proposition $\hastype{\Gamma}{t}{T}$ holds, we say that $t$ \emph{has type} $T$ in the \emph{context} $\Gamma$.
+\end{definition}
+
+Some examples:
+\begin{gather*}
+    \inferrule{ }{\hastype{\listdelim{\tyind \listsep \typrp}}{0}{\tyind}} \\
+    %
+    \inferrule{
+        \inferrule{
+            \inferrule{
+                \inferrule{ }{\hastype{\listdelim{\tyarr{\tyind}{\typrp} \listsep \tyind}}{0}{\tyarr{\tyind}{\typrp}}} \\
+                \inferrule{ }{\hastype{\listdelim{\tyarr{\tyind}{\typrp} \listsep \tyind}}{1}{\tyind}}
+            }{
+                \hastype{\listdelim{\tyarr{\tyind}{\typrp} \listsep \tyind}}{\tmapp{0}{1}}{\typrp}
+            }
+        }{
+            \hastype{\tyarr{\tyind}{\typrp}}{\tmabs{\tyind}{\tmapp{0}{1}}}{\tyarr{\tyind}{\typrp}}
+        }
+    }{
+        \hastype{}{\tmabs{\tyarr{\tyind}{\typrp}}{\tmabs{\tyind}{\tmapp{0}{1}}}}{\tyarr{(\tyarr{\tyind}{\typrp})}{\tyarr{\tyind}{\typrp}}}
+    }
+\end{gather*}
+
+
+\section{G Logic}
+
+Given a list of types $\sigma$ and a term $t$, the expression $\judgement{\sigma}{t}$ is called a \emph{judgement}.
+Let $\Sigma$ be a list of types, $\Gamma$ a list of judgements and $B$ a judgement. The expression $\sequent{\Sigma}{\Gamma}{B}$ is called a \emph{sequent}.
+We denote the list constructed by appending a head element $B$ to a tail $\Gamma$ as $\listcons{B}{\Gamma}$.
+The concatenation of two lists $\Sigma$ and $\sigma$ is denoted by $\listapp{\Sigma}{\sigma}$.
+
+We define a calculus with the following inference rules:
+\begin{gather*}
+    \inferrule{
+        \hastype{\listapp{\Sigma}{\sigma}}{t}{\typrp}
+    }{
+        \sequent{\Sigma}{\listdelim{\judgement{\sigma}{t}}}{\judgement{\sigma}{t}}
+    } \qquad
+    %
+    \inferrule{
+        \sequent{\Sigma}{\Delta}{B} \\
+        \sequent{\Sigma}{\listcons{B}{\Gamma}}{C}
+    }{
+        \sequent{\Sigma}{\listapp{\Delta}{\Gamma}}{C}
+    } \\
+    %
+    \inferrule{
+        \sequent{\Sigma}{\listcons{B}{\listcons{B}{\Gamma}}}{C}
+    }{
+        \sequent{\Sigma}{\listcons{B}{\Gamma}}{C}
+    } \qquad
+    %
+    \inferrule{
+        \hastype{\listapp{\Sigma}{\sigma}}{t}{\typrp} \\
+        \sequent{\Sigma}{\Gamma}{C}
+    }{
+        \sequent{\Sigma}{\listcons{\judgement{\sigma}{t}}{\Gamma}}{C}
+    } \\
+    %
+    \inferrule{
+        \hastype{\listapp{\Sigma}{\sigma}}{t}{\typrp}
+    }{
+        \sequent{\Sigma}{\listdelim{\judgement{\rho}{\bot}}}{\judgement{\sigma}{t}}
+    } \qquad
+    %
+    \inferrule{
+    }{
+        \sequent{\Sigma}{\listempty}{\judgement{\sigma}{\top}}
+    }
+\end{gather*}
+
+
+\printbibliography
+
+
+\end{document}
