@@ -24,21 +24,23 @@ Notation "c :> t" := (Build_judgement c t)
 Check |( []; [] --> [] :> 0 )|.
 
 Inductive def : sequent -> Prop :=
-  | ax_init (sig : list ty) (j : judgement) (gam : list judgement) :
-    def |( sig; j :: gam --> j )|
+  | ax_init (sig c : list ty) (t : tm) :
+    <| sig ++ c |- t : o |> ->
+    def |( sig; [c :> t] --> c :> t )|
   | ax_cut (sig : list ty) (del gam : list judgement) (b c : judgement) :
     def |( sig; del --> b )| -> def |( sig; b :: gam --> c )| ->
     def |( sig; del ++ gam --> c )|
   | ax_cL (sig : list ty) (gam : list judgement) (b c : judgement) :
     def |( sig; b :: b :: gam --> c )| -> def |( sig; b :: gam --> c )|
-  | ax_wL (sig : list ty) (gam : list judgement) (b c : judgement) :
-    def |( sig; gam --> c )| -> def |( sig; b :: gam --> c )|
+  | ax_wL (sig c : list ty) (gam : list judgement) (b : judgement) (t : tm) :
+    <| sig ++ c |- t : o |> -> def |( sig; gam --> b )| ->
+    def |( sig; (c :> t) :: gam --> b )|
   | ax_botL
-    (sig : list ty) (gam : list judgement) (b : judgement) (s : list ty) :
-    def |( sig; (s :> _|) :: gam --> b)|
+    (sig : list ty) (t : tm) (c d : list ty) :
+    <| sig ++ c |- t : o |> -> def |( sig; [d :> _|] --> c :> t)|
   | ax_topR
-    (sig : list ty) (gam : list judgement) (s : list ty) :
-    def |( sig; gam --> s :> ^| )|
+    (sig : list ty) (c : list ty) :
+    def |( sig; [] --> c :> ^| )|
 .
 
 Declare Custom Entry stlc_test.
