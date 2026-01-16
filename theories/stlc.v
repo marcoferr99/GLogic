@@ -75,9 +75,9 @@ Notation "^|" := (tm_top)
 Coercion tm_lvl : nat >-> tm.
 
 (** Examples *)
-Check <{ \: i, 1 }>.
-Check <{ \: (i -> i), 1 }>.
-Check <{ (\: (i -> i), 2) 1 }>.
+Check <{ \: i, 0 }>.
+Check <{ (\: (i -> o), 2) 1 }>.
+Check <{ \: o, 3 _| }>.
 
 
 (**************)
@@ -131,6 +131,13 @@ Qed.
 
 Theorem ex4 : <| [] |- \: i, _| : i -> o |>.
 Proof.  apply T_Abs. simpl. apply T_Bot. Qed.
+
+Theorem ex5 : forall T, ~ <| [] |- \: i, 1 : T |>.
+Proof.
+  intros T P.
+  inversion P. simpl in *. subst.
+  inversion H3. simpl in *. subst. discriminate.
+Qed.
 
 
 (********************)
