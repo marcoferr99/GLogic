@@ -5,4 +5,12 @@
 *.vok
 *.vos
 .CoqMakefile.d
+
+*.bbl
+*.bcf
+*.blg
+*.log
+*.out
+*.xml
+
 unused/
