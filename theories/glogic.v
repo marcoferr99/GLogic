@@ -19,7 +19,7 @@ Record sequent : Set := {
 Notation "|( sig ; l --> B )|" := (Build_sequent sig l B)
   (sig custom stlc_ty, l custom stlc_ty, B custom stlc_ty).
 Notation "c :> t" := (Build_judgement c t)
-  (in custom stlc_ty at level 60, t custom stlc_tm at level 50) : stlc_scope.
+  (in custom stlc_ty at level 70, t custom stlc_tm at level 60) : stlc_scope.
 
 Check |( []; [] --> [] :> 0 )|.
 
@@ -35,12 +35,40 @@ Inductive def : sequent -> Prop :=
   | ax_wL (sig c : list ty) (gam : list judgement) (b : judgement) (t : tm) :
     <| sig ++ c |- t : o |> -> def |( sig; gam --> b )| ->
     def |( sig; (c :> t) :: gam --> b )|
-  | ax_botL
-    (sig : list ty) (t : tm) (c d : list ty) :
+  | ax_botL (sig c d : list ty) (t : tm) :
     <| sig ++ c |- t : o |> -> def |( sig; [d :> _|] --> c :> t)|
-  | ax_topR
-    (sig : list ty) (c : list ty) :
+  | ax_topR (sig c : list ty) :
     def |( sig; [] --> c :> ^| )|
+  | ax_andL1
+    (sig c : list ty) (t s : tm) (gam : list judgement) (b : judgement) :
+    <| sig ++ c |- s : o |> ->
+    def |( sig; (c :> t) :: gam --> b )| ->
+    def |( sig; (c :> t /\ s) :: gam --> b )|
+  | ax_andL2
+    (sig c : list ty) (t s : tm) (gam : list judgement) (b : judgement) :
+    <| sig ++ c |- t : o |> ->
+    def |( sig; (c :> s) :: gam --> b )| ->
+    def |( sig; (c :> t /\ s) :: gam --> b )|
+  | ax_andR
+    (sig c : list ty) (t s : tm) (gam : list judgement) :
+    def |( sig; gam --> c :> s )| ->
+    def |( sig; gam --> c :> t )| ->
+    def |( sig; gam --> c :> s /\ t )|
+  | ax_orL
+    (sig c : list ty) (t s : tm) (gam : list judgement) (b : judgement) :
+    def |( sig; (c :> s) :: gam --> b )| ->
+    def |( sig; (c :> t) :: gam --> b )| ->
+    def |( sig; (c :> s \/ t) :: gam --> b )|
+  | ax_orR1
+    (sig c : list ty) (t s : tm) (gam : list judgement) :
+    <| sig ++ c |- t : o |> ->
+    def |( sig; gam --> c :> s )| ->
+    def |( sig; gam --> c :> s \/ t )|
+  | ax_orR2
+    (sig c : list ty) (t s : tm) (gam : list judgement) :
+    <| sig ++ c |- s : o |> ->
+    def |( sig; gam --> c :> t )| ->
+    def |( sig; gam --> c :> s \/ t )|
 .
 
 Declare Custom Entry stlc_test.
