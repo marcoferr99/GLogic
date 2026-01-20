@@ -52,7 +52,8 @@ Inductive tm : Set :=
   | tm_bot : tm
   | tm_top : tm
   | tm_and : tm -> tm -> tm
-  | tm_or  : tm -> tm -> tm.
+  | tm_or  : tm -> tm -> tm
+  | tm_imp : tm -> tm -> tm.
 
 (** Notations *)
 
@@ -78,6 +79,8 @@ Notation "x /\ y" := (tm_and x y)
   (in custom stlc_tm at level 50, left associativity) : stlc_scope.
 Notation "x \/ y" := (tm_or x y)
   (in custom stlc_tm at level 60, left associativity) : stlc_scope.
+Notation "x > y" := (tm_imp x y)
+  (in custom stlc_tm at level 70, left associativity) : stlc_scope.
 Coercion tm_lvl : nat >-> tm.
 
 (** Examples *)
@@ -108,7 +111,11 @@ Inductive has_type : list ty -> tm -> ty -> Prop :=
   | T_Or gam s t :
       has_type gam s ty_proposition ->
       has_type gam t ty_proposition ->
-      has_type gam <{ s \/ t }> ty_proposition.
+      has_type gam <{ s \/ t }> ty_proposition
+  | T_Imp gam s t :
+      has_type gam s ty_proposition ->
+      has_type gam t ty_proposition ->
+      has_type gam <{ s > t }> ty_proposition.
 
 (** Notations *)
 

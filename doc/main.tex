@@ -26,6 +26,7 @@
 \newcommand*{\tyind}{i}
 \newcommand*{\tmapp}[2]{#1 \, #2}
 \newcommand*{\tmabs}[2]{\lambda \colon #1, \, #2}
+\newcommand*{\tmimp}[2]{#1 \supset #2}
 
 \newcommand*{\hastype}[3]{#1 \vdash #2 : #3}
 \newcommand*{\nth}[2]{#1_{#2}}
@@ -68,7 +69,7 @@ We consider $\tyarr{}{}$ to be right associative, and thus $\tyarr{\typrp}{\tyar
 
 We define the terms of the simply typed lambda calculus (using the Bruijn levels) as:
 \[
-    \inddef{t}{\lvln \mid \tmapp{t}{t} \mid \tmabs{T}{t} \mid \bot \mid \top \mid t \land t \mid t \lor t}
+    \inddef{t}{\lvln \mid \tmapp{t}{t} \mid \tmabs{T}{t} \mid \bot \mid \top \mid t \land t \mid t \lor t \mid \tmimp{t}{t}}
 \]
 where $\lvln$ is a natural number and $T$ is a type.
 
@@ -98,7 +99,9 @@ Given a list of types $\Gamma$, a natural number $n$ and a type $T$, we denote t
         \inferrule{ }{\hastype{\Gamma}{\top}{\typrp}} \\
         %
         \inferrule{\hastype{\Gamma}{t}{\typrp} \\ \hastype{\Gamma}{s}{\typrp}}{\hastype{\Gamma}{t \land s}{\typrp}} \qquad
-        \inferrule{\hastype{\Gamma}{t}{\typrp} \\ \hastype{\Gamma}{s}{\typrp}}{\hastype{\Gamma}{t \lor s}{\typrp}}
+        \inferrule{\hastype{\Gamma}{t}{\typrp} \\ \hastype{\Gamma}{s}{\typrp}}{\hastype{\Gamma}{t \lor s}{\typrp}} \\
+        %
+        \inferrule{\hastype{\Gamma}{t}{\typrp} \\ \hastype{\Gamma}{s}{\typrp}}{\hastype{\Gamma}{\tmimp{t}{s}}{\typrp}}
     \end{gather*}
     If the proposition $\hastype{\Gamma}{t}{T}$ holds, we say that $t$ \emph{has type} $T$ in the \emph{context} $\Gamma$.
 \end{definition}
@@ -200,17 +203,30 @@ We define a calculus with the following inference rules:
     %
     \inflab{
         \hastype{\listapp{\Sigma}{\sigma}}{t}{\typrp} \\
-        \sequent{\Sigma}{\Gamma}{\judgement{\sigma}{s}} \\
+        \sequent{\Sigma}{\Gamma}{\judgement{\sigma}{s}}
     }{
         \sequent{\Sigma}{\Gamma}{\judgement{\sigma}{s \lor t}}
     }{$\lor R$} \qquad
     %
     \inflab{
         \hastype{\listapp{\Sigma}{\sigma}}{s}{\typrp} \\
-        \sequent{\Sigma}{\Gamma}{\judgement{\sigma}{t}} \\
+        \sequent{\Sigma}{\Gamma}{\judgement{\sigma}{t}}
     }{
         \sequent{\Sigma}{\Gamma}{\judgement{\sigma}{s \lor t}}
-    }{$\lor R$}
+    }{$\lor R$} \\
+    %
+    \inflab{
+        \sequent{\Sigma}{\Gamma}{\judgement{\sigma}{s}} \\
+        \sequent{\Sigma}{\listcons{\judgement{\sigma}{t}}{\Gamma}}{B}
+    }{
+        \sequent{\Sigma}{\listcons{\judgement{\sigma}{\tmimp{s}{t}}}{\Gamma}}{B}
+    }{$\tmimp{}{} L$} \qquad
+    %
+    \inflab{
+        \sequent{\Sigma}{\listcons{\judgement{\sigma}{s}}{\Gamma}}{\judgement{\sigma}{t}}
+    }{
+        \sequent{\Sigma}{\Gamma}{\judgement{\sigma}{\tmimp{s}{t}}}
+    }{$\tmimp{}{} R$}
 \end{gather*}
 
 
