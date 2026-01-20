@@ -51,9 +51,9 @@ Inductive tm : Set :=
   | tm_abs : ty -> tm -> tm
   | tm_bot : tm
   | tm_top : tm
-  | tm_and : tm -> tm -> tm
-  | tm_or  : tm -> tm -> tm
-  | tm_imp : tm -> tm -> tm.
+  | tm_and : tm
+  | tm_or  : tm
+  | tm_imp : tm.
 
 (** Notations *)
 
@@ -104,18 +104,12 @@ Inductive has_type : list ty -> tm -> ty -> Prop :=
       has_type gam <{ t1 t2 }> T1
   | T_Bot gam : has_type gam tm_bot ty_proposition
   | T_Top gam : has_type gam tm_top ty_proposition
-  | T_And gam s t :
-      has_type gam s ty_proposition ->
-      has_type gam t ty_proposition ->
-      has_type gam <{ s /\ t }> ty_proposition
-  | T_Or gam s t :
-      has_type gam s ty_proposition ->
-      has_type gam t ty_proposition ->
-      has_type gam <{ s \/ t }> ty_proposition
-  | T_Imp gam s t :
-      has_type gam s ty_proposition ->
-      has_type gam t ty_proposition ->
-      has_type gam <{ s > t }> ty_proposition.
+  | T_And gam :
+      has_type gam tm_and <[ o -> o -> o ]>
+  | T_Or gam :
+      has_type gam tm_or <[ o -> o -> o ]>
+  | T_Imp gam :
+      has_type gam tm_imp <[ o -> o -> o ]>.
 
 (** Notations *)
 

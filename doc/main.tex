@@ -8,6 +8,8 @@
 \usepackage[backend=biber]{biblatex}
 \addbibresource{bibliography.bib}
 
+\usepackage{ifthen}
+
 \usepackage{amsthm}
 \usepackage{mathtools}
 \usepackage{mathpartir}
@@ -19,14 +21,21 @@
 \newtheorem{definition}{Definition}
 
 
+\newcommand*{\ifempty}[3]{\ifthenelse{\equal{#1}{}}{#2}{#3}}
+
 \newcommand*{\lvln}{n}
 \newcommand*{\inddef}[2]{#1 \; \coloneq \; #2}
+
 \newcommand*{\tyarr}[2]{#1 \rightarrow #2}
 \newcommand*{\typrp}{o}
 \newcommand*{\tyind}{i}
+
+\newcommand*{\tpquant}[2]{#1_{#2}}
 \newcommand*{\tmapp}[2]{#1 \, #2}
-\newcommand*{\tmabs}[2]{\lambda \colon #1, \, #2}
-\newcommand*{\tmimp}[2]{#1 \supset #2}
+\newcommand*{\tmabs}[2]{\tpquant{\lambda}{#1} \, #2}
+\newcommand*{\tmimp}[2]{\ifempty{#1}{\,}{#1} \supset \ifempty{#2}{\,}{#2}}
+\newcommand*{\tmfors}[1]{\tpquant{\forall}{#1}}
+\newcommand*{\tmfor}[2]{\forall \colon #1, \, #2}
 
 \newcommand*{\hastype}[3]{#1 \vdash #2 : #3}
 \newcommand*{\nth}[2]{#1_{#2}}
@@ -69,10 +78,12 @@ We consider $\tyarr{}{}$ to be right associative, and thus $\tyarr{\typrp}{\tyar
 
 We define the terms of the simply typed lambda calculus (using the Bruijn levels) as:
 \[
-    \inddef{t}{\lvln \mid \tmapp{t}{t} \mid \tmabs{T}{t} \mid \bot \mid \top \mid t \land t \mid t \lor t \mid \tmimp{t}{t}}
+    \inddef{t}{\lvln \mid \tmapp{t}{t} \mid \tmabs{T}{t} \mid \alpha \mid \tmfors{T}}
 \]
-where $\lvln$ is a natural number and $T$ is a type.
-
+where $\lvln$ is a natural number, $T$ is a type and $\alpha$ is one of the following symbols:
+\[
+    \inddef{\alpha}{\bot \mid \top \mid \land \mid \lor \mid \tmimp{}{}}
+\]
 Some examples:
 \[
     \tmabs{\tyind}{0} \qquad
@@ -93,15 +104,17 @@ Given a list of types $\Gamma$, a natural number $n$ and a type $T$, we denote t
         %
         \inferrule{\hastype{\Gamma}{s}{\tyarr{A}{B}} \\ \hastype{\Gamma}{t}{A}}{\hastype{\Gamma}{\tmapp{s}{t}}{B}} \\
         %
-        \inferrule{\hastype{\listappel{\Gamma}{A}}{s}{B}}{\hastype{\Gamma}{\tmabs{A}{s}}{\tyarr{A}{B}}} \\
+        \inferrule{\hastype{\listappel{\Gamma}{A}}{t}{B}}{\hastype{\Gamma}{\tmabs{A}{t}}{\tyarr{A}{B}}} \\
         %
         \inferrule{ }{\hastype{\Gamma}{\bot}{\typrp}} \qquad
         \inferrule{ }{\hastype{\Gamma}{\top}{\typrp}} \\
         %
-        \inferrule{\hastype{\Gamma}{t}{\typrp} \\ \hastype{\Gamma}{s}{\typrp}}{\hastype{\Gamma}{t \land s}{\typrp}} \qquad
-        \inferrule{\hastype{\Gamma}{t}{\typrp} \\ \hastype{\Gamma}{s}{\typrp}}{\hastype{\Gamma}{t \lor s}{\typrp}} \\
+        \inferrule{ }{\hastype{\Gamma}{\land}{\tyarr{\typrp}{\tyarr{\typrp}{\typrp}}}} \qquad
+        \inferrule{ }{\hastype{\Gamma}{\lor}{\tyarr{\typrp}{\tyarr{\typrp}{\typrp}}}} \\
         %
-        \inferrule{\hastype{\Gamma}{t}{\typrp} \\ \hastype{\Gamma}{s}{\typrp}}{\hastype{\Gamma}{\tmimp{t}{s}}{\typrp}}
+        \inferrule{ }{\hastype{\Gamma}{\tmimp{\,}{\,}}{\tyarr{\typrp}{\tyarr{\typrp}{\typrp}}}} \\
+        %
+        \inferrule{ }{\hastype{\Gamma}{\tmfors{T}}{\tyarr{(\tyarr{T}{\typrp})}{\typrp}}}
     \end{gather*}
     If the proposition $\hastype{\Gamma}{t}{T}$ holds, we say that $t$ \emph{has type} $T$ in the \emph{context} $\Gamma$.
 \end{definition}
@@ -125,8 +138,6 @@ Some examples:
         \hastype{}{\tmabs{\tyarr{\tyind}{\typrp}}{\tmabs{\tyind}{\tmapp{0}{1}}}}{\tyarr{(\tyarr{\tyind}{\typrp})}{\tyarr{\tyind}{\typrp}}}
     }
 \end{gather*}
-
-Alternatively, we could have defined $\land$ and $\lor$ as terms of type $\tyarr{\typrp}{\tyarr{\typrp}{\typrp}}$.
 
 
 \section{G Logic}
@@ -226,7 +237,14 @@ We define a calculus with the following inference rules:
         \sequent{\Sigma}{\listcons{\judgement{\sigma}{s}}{\Gamma}}{\judgement{\sigma}{t}}
     }{
         \sequent{\Sigma}{\Gamma}{\judgement{\sigma}{\tmimp{s}{t}}}
-    }{$\tmimp{}{} R$}
+    }{$\tmimp{}{} R$} \\
+    %
+    \inflab{
+        \hastype{\listapp{\Sigma}{\sigma}}{t}{T} \\
+        \sequent{\Sigma}{\listcons{\judgement{\sigma}{s}}{\Gamma}}{B}
+    }{
+        \sequent{\Sigma}{\listcons{(\judgement{\sigma}{\tmfor{T}{s}})}{\Gamma}}{B}
+    }{$\forall L$}
 \end{gather*}
 
 
