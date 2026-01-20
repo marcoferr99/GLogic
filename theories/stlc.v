@@ -162,28 +162,39 @@ Qed.
 (** ** Substitution *)
 (********************)
 
+Notation "[ x ]" := (cons x nil) (in custom stlc_tm) : stlc_scope.
+Notation "[ x ; y ; .. ; z ]" := (cons x (cons y .. (cons z nil) ..))
+  (in custom stlc_tm,
+  format "[ '[' x ;  '/' y ;  '/' .. ;  '/' z ']' ]") : stlc_scope.
+
 (** Increase the levels in a term by 1 *)
-Fixpoint incr (t : tm) : tm :=
+Fixpoint incr m (t : tm) : tm :=
   match t with
-  | tm_lvl n => tm_lvl (S n)
-  | tm_app t1 t2 => tm_app (incr t1) (incr t2)
-  | tm_abs T t1 => tm_abs T (incr t1)
+  | tm_lvl n => tm_lvl (if Nat.leb m n then S n else n)
+  | tm_app t1 t2 => tm_app (incr m t1) (incr m t2)
+  | tm_abs T t1 => tm_abs T (incr m t1)
   | x => x
   end.
 
-Reserved Notation "[ x := s ] t"
-  (in custom stlc_tm at level 5, x constr, s custom stlc_tm,
+Reserved Notation "[ l | m ] t"
+  (in custom stlc_tm at level 5, l custom stlc_tm at level 0,
   t custom stlc_tm at next level, right associativity).
-Fixpoint subst (x : nat) (s : tm) (t : tm) : tm :=
+Fixpoint subst (m : nat) (l : list tm) (t : tm) : tm :=
   match t with
-  | tm_lvl n => if Nat.eqb n x then s else t
-  | <{ t1 t2 }> => <{ [x:=s]t1 [x:=s]t2 }>
-  | <{ \: T, t1 }> => <{ \: T, [x := $(incr s)] t1 }>
+  | tm_lvl n => nth n l n
+  | <{ t1 t2 }> => <{ [l|m]t1 [l|m]t2 }>
+  | <{ \: T, t1 }> => <{ \: T, [$(map (incr m) l) | m] t1 }>
   | x => x
   end
-where "[ x := s ] t" := (subst x s t) (in custom stlc_tm) : stlc_scope.
+where "[ l | m ] t" := (subst m l t) (in custom stlc_tm) : stlc_scope.
 
 (** Examples *)
-Compute <{ [1 := (\: i, 5)] (1 2) }>.
-Compute <{ [1 := (\: i, 1 2)] (\: o, 1) }>.
-Compute <{ [2 := (\: i, 0 0)] (\: o, \: i, 2 2) }>.
+Compute <{ [[\: i, 1; $(tm_lvl 0)] | 1] \: o, 1 0 }>.
+Compute <{ [[\: i, 1; $(tm_lvl 0)] | 2] \: o, 1 0 }>.
+Compute <{ [[\: i, 0 1] | 2] \: o, 0 }>.
+Compute <{ [[\: i, 0 1] | 1] \: o, 0 }>.
+Compute <{ [[\: i, 0 0] | 0] \: o, 0 }>.
+
+Compute <{ [[$(tm_lvl 0); \: i, 5; $(tm_lvl 2)] | 4] (1 2) }>.
+Compute <{ [[$(tm_lvl 0); \: i, 1 2] | 2] (\: o, 1) }>.
+Compute <{ [[$(tm_lvl 0); $(tm_lvl 1); \: i, 0 0] | 0] (\: o, \: i, 2 2) }>.
