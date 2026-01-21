@@ -297,10 +297,24 @@ We define a calculus with the following inference rules:
     %
     \inflab{
         \hastype{\listapp{\Sigma}{\sigma}}{t}{T} \\
-        \sequent{\Sigma}{\listcons{\judgement{\sigma}{\subst{s}{\length{\listapp{\Sigma}{\sigma}}}{0 \listsep 1 \listsep \dots \listsep \length{\listapp{\Sigma}{\sigma}} \listsep t}}}{\Gamma}}{B}
+        \sequent{\Sigma}{\listcons{\judgement{\sigma}{\subst{s}{\length{\listapp{\Sigma}{\sigma}}}{0 \listsep 1 \listsep \dots \listsep \length{\listapp{\Sigma}{\sigma}}-1 \listsep t}}}{\Gamma}}{B}
     }{
         \sequent{\Sigma}{\listcons{(\judgement{\sigma}{\tmfor{T}{s}})}{\Gamma}}{B}
-    }{$\forall L$}
+    }{$\forall L$} \\
+    %
+    \inflab{
+        \sequent{
+            \listappel{\Sigma}{(\tyarr{T_{\length{\Sigma} + 1}}{\tyarr{\dots}{\tyarr{T_n}{S}}})}
+        }{\Gamma}{
+            \judgement{
+                \listdelim{T_{\length{\Sigma} + 1} \listsep \dots \listsep T_n}
+            }{
+                \subst{s}{n+1}{0 \listsep \dots \listsep \length{\Sigma}-1 \listsep \length{\Sigma}+1 \listsep \dots \listsep n \listsep \tmapp{\tmapp{\tmapp{\length{\Sigma}}{(\length{\Sigma}+1)}}{\dots}}{n}}
+            }
+        }
+    }{
+        \sequent{\Sigma}{\Gamma}{\judgement{\listdelim{T_{\length{\Sigma} + 1} \listsep \dots \listsep T_n}}{\tmfor{S}{s}}}
+    }{$\forall R$}
 \end{gather*}
 
 
