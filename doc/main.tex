@@ -37,6 +37,8 @@
 \newcommand*{\tmimp}[2]{\ifempty{#1}{\,}{#1} \supset \ifempty{#2}{\,}{#2}}
 \newcommand*{\tmfors}[1]{\tpquant{\forall}{#1}}
 \newcommand*{\tmfor}[2]{\tmfors{#1} \, #2}
+\newcommand*{\tmexs}[1]{\tpquant{\exists}{#1}}
+\newcommand*{\tmex}[2]{\tmexs{#1} \, #2}
 
 \newcommand*{\hastype}[3]{#1 \vdash #2 : #3}
 \newcommand*{\nth}[2]{#1_{#2}}
@@ -82,7 +84,7 @@ We consider $\tyarr{}{}$ to be right associative, and thus $\tyarr{\typrp}{\tyar
 
 We define the terms of the simply typed lambda calculus (using the Bruijn levels) as:
 \[
-    \inddef{t}{\lvln \mid \tmapp{t}{t} \mid \tmabs{T}{t} \mid \alpha \mid \tmfors{T}}
+    \inddef{t}{\lvln \mid \tmapp{t}{t} \mid \tmabs{T}{t} \mid \alpha \mid \tmfors{T} \mid \tmexs{T}}
 \]
 where $\lvln$ is a natural number, $T$ is a type and $\alpha$ is one of the following symbols:
 \[
@@ -123,7 +125,9 @@ Given a list of types $\Gamma$, a natural number $n$ and a type $T$, we denote t
         %
         \inferrule{ }{\hastype{\Gamma}{\tmimp{\,}{\,}}{\tyarr{\typrp}{\tyarr{\typrp}{\typrp}}}} \\
         %
-        \inferrule{ }{\hastype{\Gamma}{\tmfors{T}}{\tyarr{(\tyarr{T}{\typrp})}{\typrp}}}
+        \inferrule{ }{\hastype{\Gamma}{\tmfors{T}}{\tyarr{(\tyarr{T}{\typrp})}{\typrp}}} \\
+        %
+        \inferrule{ }{\hastype{\Gamma}{\tmexs{T}}{\tyarr{(\tyarr{T}{\typrp})}{\typrp}}}
     \end{gather*}
     If the proposition $\hastype{\Gamma}{t}{T}$ holds, we say that $t$ \emph{has type} $T$ in the \emph{context} $\Gamma$.
 \end{definition}
@@ -306,16 +310,33 @@ We define a calculus with the following inference rules:
         \sequent{
             \listappel{\Sigma}{(\tyarr{T_{\length{\Sigma} + 1}}{\tyarr{\dots}{\tyarr{T_n}{S}}})}
         }{\Gamma}{
-            \judgement{
-                \listdelim{T_{\length{\Sigma} + 1} \listsep \dots \listsep T_n}
-            }{
-                \subst{s}{n+1}{0 \listsep \dots \listsep \length{\Sigma}-1 \listsep \length{\Sigma}+1 \listsep \dots \listsep n \listsep \tmapp{\tmapp{\tmapp{\length{\Sigma}}{(\length{\Sigma}+1)}}{\dots}}{n}}
-            }
+            \judgement{\listdelim{T_{\length{\Sigma} + 1} \listsep \dots \listsep T_n}}{s'}
         }
     }{
         \sequent{\Sigma}{\Gamma}{\judgement{\listdelim{T_{\length{\Sigma} + 1} \listsep \dots \listsep T_n}}{\tmfor{S}{s}}}
-    }{$\forall R$}
+    }{$\forall R$} \\
+    %
+    \inflab{
+        \sequent{
+            \listappel{\Sigma}{(\tyarr{T_{\length{\Sigma} + 1}}{\tyarr{\dots}{\tyarr{T_n}{S}}})}
+        }{
+            \listcons{\judgement{\listdelim{T_{\length{\Sigma} + 1} \listsep \dots \listsep T_n}}{s'}}{\Gamma}
+        }{B}
+    }{
+        \sequent{\Sigma}{\listcons{(\judgement{\listdelim{T_{\length{\Sigma} + 1} \listsep \dots \listsep T_n}}{\tmex{S}{s}})}{\Gamma}}{B}
+    }{$\exists L$} \\
+    %
+    \inflab{
+        \hastype{\listapp{\Sigma}{\sigma}}{t}{T} \\
+        \sequent{\Sigma}{\Gamma}{\judgement{\sigma}{\subst{s}{\length{\listapp{\Sigma}{\sigma}}}{0 \listsep 1 \listsep \dots \listsep \length{\listapp{\Sigma}{\sigma}}-1 \listsep t}}}
+    }{
+        \sequent{\Sigma}{\Gamma}{\judgement{\sigma}{\tmex{T}{s}}}
+    }{$\exists R$} \\
 \end{gather*}
+where
+\[
+    s' = \subst{s}{n+1}{0 \listsep \dots \listsep \length{\Sigma}-1 \listsep \length{\Sigma}+1 \listsep \dots \listsep n \listsep \tmapp{\tmapp{\tmapp{\length{\Sigma}}{(\length{\Sigma}+1)}}{\dots}}{n}}
+\]
 
 
 \printbibliography

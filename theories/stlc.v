@@ -54,7 +54,8 @@ Inductive tm : Set :=
   | tm_and : tm
   | tm_or  : tm
   | tm_imp : tm
-  | tm_for : ty -> tm.
+  | tm_for : ty -> tm
+  | tm_ex  : ty -> tm.
 
 (** Notations *)
 
@@ -112,7 +113,9 @@ Inductive has_type : list ty -> tm -> ty -> Prop :=
   | T_Imp gam :
       has_type gam tm_imp <[ o -> o -> o ]>
   | T_For gam T :
-      has_type gam (tm_for T) <[ (T -> o) -> o ]>.
+      has_type gam (tm_for T) <[ (T -> o) -> o ]>
+  | T_Ex gam T :
+      has_type gam (tm_ex T) <[ (T -> o) -> o ]>.
 
 (** Notations *)
 
