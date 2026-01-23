@@ -1,5 +1,5 @@
-From Coq Require Import List.
-Import ListNotations.
+From Coq Require Export List.
+Export ListNotations.
 
 
 (***********************************)
@@ -87,7 +87,6 @@ Module Stlc (Ty : TY).
     | tm_imp : tm
     | tm_for : ty -> tm
     | tm_ex  : ty -> tm.
-  Check tm_rec.
 
   (** Notations *)
   Notation "<{ x }>" := x (x custom stlc_tm at level 200) : stlc_scope.
@@ -142,6 +141,14 @@ Module Stlc (Ty : TY).
     (at level 0, gam custom stlc_ty at level 200,
     t custom stlc_tm, T custom stlc_ty) : stlc_scope.
 
+  Theorem has_type_length c (n : nat) T :
+    has_type c n T -> n < length c.
+  Proof.
+    intros HT. inversion HT. apply nth_error_Some.
+    match goal with | H : _ |- _ => rewrite H end.
+    discriminate.
+  Qed.
+
 
   (********************)
   (** ** Substitution *)
@@ -153,7 +160,7 @@ Module Stlc (Ty : TY).
     | tm_lvl n => tm_lvl (if Nat.leb m n then S n else n)
     | tm_app t1 t2 => tm_app (incr_bound m t1) (incr_bound m t2)
     | tm_abs T t1 => tm_abs T (incr_bound m t1)
-    | x => x
+    | const => const
     end.
 
   Fixpoint subst m (l : list tm) (t : tm) : tm :=
@@ -161,6 +168,43 @@ Module Stlc (Ty : TY).
     | tm_lvl n => nth n l n
     | tm_app s t => tm_app (subst m l s) (subst m l t)
     | tm_abs T t => tm_abs T (subst m (map (incr_bound m) l) t)
-    | x => x
+    | const => const
     end.
+
+  Theorem has_type_subst C S T t s :
+    Forall (fun si => has_type C si (S si)) s ->
+    has_type (map S s) t T ->
+    has_type C (subst (length C) s t) T.
+  Proof.
+    intros F HT.
+    generalize dependent s. generalize dependent T.
+    generalize dependent C.
+    induction t; simpl; intros C T s F HT.
+    - inversion HT. subst.
+      eapply nth_error_nth in H1. rewrite map_nth in H1.
+      eapply Forall_nth in F.
+      + rewrite H1 in F. apply F.
+      + erewrite <- length_map.
+        eapply has_type_length. eassumption.
+    - inversion HT. subst. eapply t_app.
+      + apply IHt1; eassumption.
+      + auto.
+    - inversion HT. subst. constructor.
+      apply IHt.
+
+  Theorem subst_lemma (A : ty) (t : tm) (s : list tm) (T : list ty) (S : tm -> ty) :
+    Forall (fun si => <| T |- si : $(S si) |>) s -> (
+        <| $(map S s) |- t : A |> <-> <| T |- [s | length T] t : A |>
+    ).
+  Proof.
+    intros F. split; intros H.
+    - generalize dependent A. induction t; intros A H.
+      + simpl.
+      + simpl. eapply T_App.
+        * apply IHt1.
+        Search Forall nth.
+        induction s.
+        * simpl in *. inversion H. subst.
+          rewrite nth_error_nil in H2. discriminate.
+        * simpl in *.
 End Stlc.
