@@ -11,7 +11,7 @@ Module GLogic (Ty : TY).
 
   Record judgement : Set := {
     jd_context : context;
-    jd_tm  : tm
+    jd_tm : tm
   }.
 
   Record sequent : Set := {
@@ -23,97 +23,51 @@ Module GLogic (Ty : TY).
   Notation "|( sig ; l --> B )|" := (Build_sequent sig l B)
     (sig custom stlc_ty, l custom stlc_ty, B custom stlc_ty).
   Notation "c :> t" := (Build_judgement c t)
-    (in custom stlc_ty at level 70, t custom stlc_tm at level 60) : stlc_scope.
+    (at level 70, t custom stlc_tm at level 60) : stlc_scope.
 
-  Check |( []; [] --> [] :> 0 )|.
-
-  Inductive def : sequent -> Prop :=
-    | ax_init (sig c : list ty) (t : tm) :
-      <| sig ++ c |- t : o |> ->
-      def |( sig; [c :> t] --> c :> t )|
-    | ax_cut (sig : list ty) (del gam : list judgement) (b c : judgement) :
-      def |( sig; del --> b )| -> def |( sig; b :: gam --> c )| ->
-      def |( sig; del ++ gam --> c )|
-    | ax_cL (sig : list ty) (gam : list judgement) (b c : judgement) :
-      def |( sig; b :: b :: gam --> c )| -> def |( sig; b :: gam --> c )|
-    | ax_wL (sig c : list ty) (gam : list judgement) (b : judgement) (t : tm) :
-      <| sig ++ c |- t : o |> -> def |( sig; gam --> b )| ->
-      def |( sig; (c :> t) :: gam --> b )|
-    | ax_botL (sig c d : list ty) (t : tm) :
-      <| sig ++ c |- t : o |> -> def |( sig; [d :> _|] --> c :> t)|
-    | ax_topR (sig c : list ty) :
-      def |( sig; [] --> c :> ^| )|
-    | ax_andL1
-      (sig c : list ty) (t s : tm) (gam : list judgement) (b : judgement) :
-      <| sig ++ c |- s : o |> ->
-      def |( sig; (c :> t) :: gam --> b )| ->
-      def |( sig; (c :> t /\ s) :: gam --> b )|
-    | ax_andL2
-      (sig c : list ty) (t s : tm) (gam : list judgement) (b : judgement) :
-      <| sig ++ c |- t : o |> ->
-      def |( sig; (c :> s) :: gam --> b )| ->
-      def |( sig; (c :> t /\ s) :: gam --> b )|
-    | ax_andR
-      (sig c : list ty) (t s : tm) (gam : list judgement) :
-      def |( sig; gam --> c :> s )| ->
-      def |( sig; gam --> c :> t )| ->
-      def |( sig; gam --> c :> s /\ t )|
-    | ax_orL
-      (sig c : list ty) (t s : tm) (gam : list judgement) (b : judgement) :
-      def |( sig; (c :> s) :: gam --> b )| ->
-      def |( sig; (c :> t) :: gam --> b )| ->
-      def |( sig; (c :> s \/ t) :: gam --> b )|
-    | ax_orR1
-      (sig c : list ty) (t s : tm) (gam : list judgement) :
-      <| sig ++ c |- t : o |> ->
-      def |( sig; gam --> c :> s )| ->
-      def |( sig; gam --> c :> s \/ t )|
-    | ax_orR2
-      (sig c : list ty) (t s : tm) (gam : list judgement) :
-      <| sig ++ c |- s : o |> ->
-      def |( sig; gam --> c :> t )| ->
-      def |( sig; gam --> c :> s \/ t )|
+  Inductive is_derivable : sequent -> Prop :=
+    | rl_init C c t :
+        has_type (C ++ c) t ty_prp ->
+        is_derivable (Build_sequent C [c :> t] (c :> t))
+    | rl_cut C l m b c :
+        is_derivable (Build_sequent C l b) ->
+        is_derivable (Build_sequent C (b :: m) c) ->
+        is_derivable (Build_sequent C (l ++ m) c)
+    | rl_cL C l b c :
+        is_derivable (Build_sequent C (b :: b :: l) c) ->
+        is_derivable (Build_sequent C (b :: l) c)
+    | rl_wL C c l b t :
+        has_type (C ++ c) t ty_prp ->
+        is_derivable (Build_sequent C l b) ->
+        is_derivable (Build_sequent C (c :> t :: l) b)
+    | rl_botL C c d t :
+        has_type (C ++ c) t ty_prp ->
+        is_derivable (Build_sequent C [d :> tm_bot] (c :> t))
+    | rl_topR C c :
+        is_derivable (Build_sequent C [] (c :> tm_top))
+    | rl_andL1 C c l b t s :
+        has_type (C ++ c) t ty_prp ->
+        is_derivable (Build_sequent C (c :> s :: l) b) ->
+        is_derivable (Build_sequent C (c :> (tm_and s t) :: l) b)
+    | rl_andL2 C c l b t s :
+        has_type (C ++ c) s ty_prp ->
+        is_derivable (Build_sequent C (c :> t :: l) b) ->
+        is_derivable (Build_sequent C (c :> (tm_and s t) :: l) b)
+    | rl_andR C c l t s :
+        is_derivable (Build_sequent C l (c :> s)) ->
+        is_derivable (Build_sequent C l (c :> t)) ->
+        is_derivable (Build_sequent C l (c :> tm_and s t))
+    | rl_orL C c l b t s :
+        is_derivable (Build_sequent C (c :> s :: l) b) ->
+        is_derivable (Build_sequent C (c :> t :: l) b) ->
+        is_derivable (Build_sequent C (c :> tm_or s t :: l) b)
+    | rl_orR1 C c l t s :
+        has_type (C ++ c) t ty_prp ->
+        is_derivable (Build_sequent C l (c :> s)) ->
+        is_derivable (Build_sequent C l (c :> tm_or s t))
+    | rl_orR2 C c l t s :
+        has_type (C ++ c) s ty_prp ->
+        is_derivable (Build_sequent C l (c :> t)) ->
+        is_derivable (Build_sequent C l (c :> tm_or s t))
   .
-
-  Declare Custom Entry stlc_test.
-  Notation "x" := x (in custom stlc_test at level 0, x ident).
-
-  Notation "sig ; l --> B" := (Build_sequent sig l B) (at level 99, sig custom stlc_test at level 0).
-  Parameter sig : list ty.
-  Parameter l : list judgement.
-  Parameter B : judgement.
-  Check || [o;i] ; l --> B.
-
-  Notation "|( x )|" := x (x custom stlc_sequent) : stlc_scope.
-  Notation "x" := x (in custom stlc_sequent at level 0, x global) : stlc_scope.
-  Notation "( x )" := x (in custom stlc_sequent at level 0, x custom stlc_sequent) : stlc_scope.
-  Notation "sig ; l --> B" := (Build_sequent sig l B)
-    (in custom stlc_sequent at level 99, sig custom stlc_ty at level 200, l custom stlc_sequent at level 200, B custom stlc_sequent at level 200, right associativity) : stlc_scope.
-
-  (** Examples *)
-  Parameter sig : list ty.
-  Parameter l : list judgement.
-  Parameter B : judgement.
-  Check |( sig ; l --> B )|.
-  Check |( []; [] --> [] :> 0 )|.
-
-
-  (* TODO: Verificare che B è una formula (cioè di tipo 'o') *)
-
-  Definition is_ax_init (c : sequent) (p : list sequent) :=
-    p = [] /\ exists sig B gam, c = |(sig; B :: gam --> B)|.
-
-  Definition is_ax_cut (c : sequent) (p : list sequent) :=
-    exists sig del gam B C,
-    c = |(sig; del ++ gam --> C)| /\
-    p = [|(sig; del --> B)|; |(sig; B :: gam --> C)|].
-
-  Definition is_ax_cL c p :=
-    exists sig B gam C,
-    p = [|(sig; B :: B :: gam --> C)|] /\
-    c = |(sig; B :: gam --> C)|.
-
-  Definition is_ax_wL c p :=
-    exists sig gam B C,
-    p = [|(sig; gam --> C)|] /\
-    c = |(sig; B :: gam --> C)|.
+End GLogic.
