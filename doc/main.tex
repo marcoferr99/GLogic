@@ -18,6 +18,7 @@
 \usepackage[colorlinks]{hyperref}
 
 
+\newtheorem{theorem}{Theorem}
 \theoremstyle{definition}
 \newtheorem{definition}{Definition}
 
@@ -199,6 +200,12 @@ Some examples:
 
 In a substitution $\subst{t}{m}{s}$, the resulting term and all the terms in the list $s$ are meant to be interpreted with $m$ free variables, while the term $t$ is meant to be interpreted with a number of free variables equal to the length of $s$.
 
+\begin{theorem}
+    If $\hastype{\listdelim{S_1 \listsep \dots \listsep S_n}}{t}{T}$ and for every $i = 1, \dots, n$ we have that $\hastype{\listdelim{T_1 \listsep \dots \listsep T_m}}{s_i}{S_i}$ then $\hastype{\listdelim{T_1 \listsep \dots \listsep T_m}}{\subst{t}{m}{s_1 \listsep \dots \listsep s_n}}{T}$.
+\end{theorem}
+
+For example, $\hastype{\listdelim{\typrp}}{0}{\typrp}$ and $\hastype{\listdelim{\tyind}}{\top}{\typrp}$ and $\hastype{\listdelim{\tyind}}{\subst{0}{1}{\top}}{\typrp}$, that is, $\hastype{\listdelim{\tyind}}{\top}{\typrp}$.
+
 
 \section{G Logic}
 
@@ -291,13 +298,13 @@ We define a calculus with the following inference rules:
         \sequent{\Sigma}{\listcons{\judgement{\sigma}{t}}{\Gamma}}{B}
     }{
         \sequent{\Sigma}{\listcons{\judgement{\sigma}{\tmimp{s}{t}}}{\Gamma}}{B}
-    }{$\tmimp{}{} L$} \qquad
+    }{$\supset \! L$} \qquad
     %
     \inflab{
         \sequent{\Sigma}{\listcons{\judgement{\sigma}{s}}{\Gamma}}{\judgement{\sigma}{t}}
     }{
         \sequent{\Sigma}{\Gamma}{\judgement{\sigma}{\tmimp{s}{t}}}
-    }{$\tmimp{}{} R$} \\
+    }{$\supset \! R$} \\
     %
     \inflab{
         \hastype{\listapp{\Sigma}{\sigma}}{t}{T} \\
@@ -336,6 +343,24 @@ We define a calculus with the following inference rules:
 where
 \[
     s' = \subst{s}{n+1}{0 \listsep \dots \listsep \length{\Sigma}-1 \listsep \length{\Sigma}+1 \listsep \dots \listsep n \listsep \tmapp{\tmapp{\tmapp{\length{\Sigma}}{(\length{\Sigma}+1)}}{\dots}}{n}}
+\]
+
+We want for every term that occurs inside a sequent to have type $\typrp$.
+We check that the all the rules enforce this, focusing on the non trivial ones only.
+\[
+    \inferrule{
+        \inferrule{
+            \hastype{\listapp{\Sigma}{\sigma}}{t}{T} \\
+            \hastype{\listapp{\Sigma}{\sigma}}{
+                \subst{s}{\length{\listapp{\Sigma}{\sigma}}}{0 \listsep 1 \listsep \dots \listsep \length{\listapp{\Sigma}{\sigma}}-1 \listsep t}
+            }{\typrp}
+        }
+        {
+            \hastype{\listappel{\listapp{\Sigma}{\sigma}}{T}}{s}{\typrp}
+        }
+    }{
+        \hastype{\listapp{\Sigma}{\sigma}}{\tmfor{T}{s}}{\typrp}
+    }
 \]
 
 
