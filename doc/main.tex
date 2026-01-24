@@ -197,12 +197,28 @@ Some examples:
     \tmabs{\typrp}{(\subst{(\tmapp{1}{0})}{2}{\tmabs{\tyind}{0} \listsep 1})} =
     \tmabs{\typrp}{\tmapp{1}{(\tmabs{\tyind}{0})}}
 \]
+\[
+    \subst{(\tmabs{\typrp}{0})}{1}{0} = \tmabs{\typrp}{(\subst{0}{2}{0 \listsep 1})}
+\]
 
 In a substitution $\subst{t}{m}{s}$, the resulting term and all the terms in the list $s$ are meant to be interpreted with $m$ free variables, while the term $t$ is meant to be interpreted with a number of free variables equal to the length of $s$.
 
 \begin{theorem}
-    If $\hastype{\listdelim{S_1 \listsep \dots \listsep S_n}}{t}{T}$ and for every $i = 1, \dots, n$ we have that $\hastype{\listdelim{T_1 \listsep \dots \listsep T_m}}{s_i}{S_i}$ then $\hastype{\listdelim{T_1 \listsep \dots \listsep T_m}}{\subst{t}{m}{s_1 \listsep \dots \listsep s_n}}{T}$.
+    If for every $i = 1, \dots, n$ we have that $\hastype{\listdelim{T_1 \listsep \dots \listsep T_m}}{s_i}{S_i}$
+    and $\hastype{\listdelim{S_1 \listsep \dots \listsep S_n}}{t}{T}$
+    then $\hastype{\listdelim{T_1 \listsep \dots \listsep T_m}}{\subst{t}{m}{s_1 \listsep \dots \listsep s_n}}{T}$.
 \end{theorem}
+
+\begin{proof}
+    If $t = \tmabs{A}{a}$ then
+    \[
+        \subst{t}{m}{s_1 \listsep \dots \listsep s_n} =
+        \subst{(\tmabs{A}{a})}{m}{s_1 \listsep \dots \listsep s_n} =
+        \tmabs{A}{(\subst{a}{m}{s_1^+ \listsep \dots \listsep s_n^+ \listsep n})}
+    \]
+    and $T = \tyarr{A}{B}$.
+    Thus, $\hastype{\listdelim{S_1 \listsep \dots \listsep S_n \listsep A}}{a}{B}$.
+\end{proof}
 
 For example, $\hastype{\listdelim{\typrp}}{0}{\typrp}$ and $\hastype{\listdelim{\tyind}}{\top}{\typrp}$ and $\hastype{\listdelim{\tyind}}{\subst{0}{1}{\top}}{\typrp}$, that is, $\hastype{\listdelim{\tyind}}{\top}{\typrp}$.
 
