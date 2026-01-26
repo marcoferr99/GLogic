@@ -1,8 +1,5 @@
 From Coq Require Export List.
-Export ListNotations.
-Require Import Lia.
-Import PeanoNat.Nat.
-Import Bool.
+From stdpp Require Import decidable.
 
 
 (***********************************)
@@ -24,14 +21,18 @@ Module Type TY.
   Parameter ty_prp : ty.
   Parameter ty_arr : ty -> ty -> ty.
 
-  Parameter eqb_ty : ty -> ty -> bool.
-  Axiom eqb_ty_eq : forall A B, eqb_ty A B = true -> A = B.
-  Axiom eqb_ty_spec : forall A B, reflect (A = B) (eqb_ty A B).
+  Declare Instance eq_ty_dec : EqDecision ty.
 
-  Parameter is_ty_arr : ty -> option (ty * ty).
-  Axiom is_ty_arr_ty_arr : forall A B, is_ty_arr (ty_arr A B) = Some (A, B).
-  Axiom ty_arr_is_ty_arr :
-    forall A B t, is_ty_arr t = Some (A, B) -> t = ty_arr A B.
+  Parameter ty_rec :
+    forall P : ty -> Set,
+      P ty_prp ->
+      (forall t, P t -> forall s, P s -> P (ty_arr t s)) ->
+      (forall t, P t) ->
+      forall t, P t.
+
+  Axiom ty_rec_prp : forall P p a d, ty_rec P p a d ty_prp = p.
+  Axiom ty_rec_arr : forall P p a d A B,
+    ty_rec P p a d (ty_arr A B) = a _ (ty_rec P p a d A) _ (ty_rec P p a d B).
 End TY.
 
 (** Global notation declarations. *)
@@ -59,11 +60,15 @@ Module TyChurch <: TY.
     | tyc_prp : tyc
     | tyc_obj : tyc
     | tyc_arr : tyc -> tyc -> tyc.
-  Check tyc_rec.
+  Print tyc_rect.
+  Check tyc_rec (fun t => nat).
 
   Definition ty := tyc.
   Definition ty_prp := tyc_prp.
   Definition ty_arr := tyc_arr.
+
+  Instance eq_ty_dec : EqDecision ty.
+  Proof. solve_decision. Qed.
 
   Fixpoint eqb_ty S T :=
     match S, T with
@@ -85,6 +90,17 @@ Module TyChurch <: TY.
     - destruct (eqb_ty A1 B1); try reflexivity.
       simpl in *. discriminate.
   Qed.
+
+  Definition ty_rec :
+    forall P : ty -> Set,
+      P ty_prp ->
+      (forall t, P t -> forall s, P s -> P (ty_arr t s)) ->
+      (forall t, P t) ->
+      forall t, P t :=
+      fun P p a d => tyc_rec P p (d tyc_obj) a.
+
+  Theorem ty_rec_prp P p a d : ty_rec P p a d ty_prp = p.
+  Proof. reflexivity. Qed.
 
   Theorem eqb_ty_spec A B : reflect (A = B) (eqb_ty A B).
   Proof.
@@ -112,6 +128,11 @@ Module TyChurch <: TY.
     intros H. destruct t; simpl in *; try discriminate.
     injection H. intros. subst. reflexivity.
   Qed.
+
+  Theorem ty_rec_arr P p a d A B :
+    ty_rec P p a d (ty_arr A B) =
+    a _ (ty_rec P p a d A) _ (ty_rec P p a d B).
+  Proof. reflexivity. Qed.
 End TyChurch.
 
 Module TyChurchTheories.
@@ -209,10 +230,7 @@ Module Stlc (Ty : TY).
     | tm_app s t =>
         match type_check c s, type_check c t with
         | Some AR, Some A1 =>
-            match is_ty_arr AR with
-            | Some (A, B) => if eqb_ty A A1 then Some B else None
-            | _ => None
-            end
+            ty_rec _ None (fun A _ B _ => if decide (A = A1) then Some B else None) (fun t => None) AR
         | _, _ => None
         end
     | tm_bot => Some ty_prp
@@ -538,79 +556,56 @@ Module Stlc (Ty : TY).
   Qed.
 
   Theorem has_type_subst2 C T S t s :
+    length C <= length S ->
     Forall2 (fun si Si => has_type C si Si) s S ->
     has_type C (subst (length C) s t) T ->
     has_type S t T.
   Proof.
     generalize dependent s. generalize dependent S.
     generalize dependent T. generalize dependent C.
-    induction t; simpl; intros C T S s F HT.
+    induction t; simpl; intros C T S s L F HT;
+      try solve [inversion HT; constructor].
     - assert (exists A, has_type S n A). {
-        eexists. constructor.
-        Search nth_error Some.
+        destruct (ltb_spec n (length S)).
+        - apply nth_error_Some in H.
+          destruct (nth_error S n) eqn : E.
+          + exists t0. now constructor.
+          + exfalso. now apply H.
+        - apply Forall2_length in F.
+          rewrite nth_overflow in HT; [|now rewrite F].
+          inversion HT. subst.
+          generalize nth_error_None as N.
+          intros N. edestruct N.
+          rewrite H1 in H2; [discriminate|]. lia.
       }
-    - inversion HT. subst.
-    - generalize dependent s.
-      generalize dependent n.
-      induction S; intros n HT Hn s F.
-      + simpl in *. inversion HT. subst.
-        rewrite nth_error_nil in *. discriminate.
-      + destruct s.
-        * apply Forall2_length in F. discriminate.
-        * inversion F. subst.
-          destruct n as [|n].
-          -- simpl in *. injection Hn. intros. now subst.
-          -- simpl in *.
-             destruct (ltb_spec n (length s)).
-             ++ rewrite nth_indep with (d' := tm_lvl n);
-                  [|assumption].
-                apply IHS; try assumption.
-                constructor. inversion HT. subst.
-                assumption.
-             ++ generalize nth_error_None.
-                intros N. edestruct N.
-                rewrite H1 in Hn; [discriminate|].
-                apply Forall2_length in H4.
-                now rewrite <- H4.
-    - econstructor.
+      destruct H. replace T with x; [assumption|].
+      eapply has_type_subst1 in H; [|eassumption].
+      simpl in H.
+      eapply has_type_unique; eassumption.
+    - inversion HT. subst. econstructor.
       + eapply IHt1; eassumption.
       + eapply IHt2; eassumption.
-    - replace (length C + 1) with (length (C ++ [t0]));
-        [|apply length_app].
-      eapply IHt; [|eassumption].
-      apply Forall2_app.
-      + clear IHt HT H3.
-        generalize dependent s.
-        induction S; intros s F.
-        * destruct s; [constructor|].
-          apply Forall2_length in F. discriminate.
-        * destruct s.
-          -- apply Forall2_length in F. discriminate.
-          -- inversion F. subst.
-             constructor; [now apply has_type_app|].
-             now apply IHS.
-      + constructor; constructor.
-        rewrite nth_error_app2; [|lia].
-        now rewrite sub_diag.
+    - inversion HT. subst. constructor.
+      eapply (IHt (C ++ [t0])).
+      3:{
+        replace (length C + 1) with (length (C ++ [t0]));
+          [|apply length_app].
+        rewrite length_app. simpl. apply H3.
+      }
+      + repeat rewrite length_app. simpl. lia.
+      + apply Forall2_app.
+        * clear IHt HT H3 B t1 L.
+          generalize dependent s.
+          induction S; intros s F.
+          -- destruct s; [constructor|].
+             apply Forall2_length in F. discriminate.
+          -- destruct s.
+             ++ apply Forall2_length in F. discriminate.
+             ++ inversion F. subst.
+                constructor; [now apply has_type_app|].
+                apply IHS; assumption.
+        * constructor; constructor.
+          rewrite nth_error_app2; [|lia].
+          now rewrite sub_diag.
   Qed.
 End Stlc.
-
-
-  Theorem th C t T n m : has_type C t T ->
-    n >= length C -> m >= length C ->
-    incr_bound n t = incr_bound m t.
-  Proof.
-    intros HT.
-    generalize dependent m. generalize dependent n.
-    induction HT; simpl; intros a b Ha Hb.
-    - assert (n < length c). {
-        generalize nth_error_None. intros N. edestruct N.
-        destruct (PeanoNat.Nat.leb_spec0 (length c) n).
-        - now rewrite H1 in H.
-        - lia.
-      }
-      destruct (PeanoNat.Nat.leb_spec0 a n), (PeanoNat.Nat.leb_spec0 b n); try reflexivity; lia.
-    - erewrite IHHT.
-      + reflexivity.
-      +
-
