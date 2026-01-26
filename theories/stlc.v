@@ -1,4 +1,3 @@
-From Coq Require Export List.
 From stdpp Require Import decidable.
 
 
@@ -25,14 +24,26 @@ Module Type TY.
 
   Parameter ty_rec :
     forall P : ty -> Set,
-      P ty_prp ->
-      (forall t, P t -> forall s, P s -> P (ty_arr t s)) ->
-      (forall t, P t) ->
-      forall t, P t.
+    P ty_prp ->
+    (forall t, P t -> forall s, P s -> P (ty_arr t s)) ->
+    (forall t, P t) ->
+    forall t, P t.
+
+  Parameter ty_ind :
+    forall P : ty -> Prop,
+    P ty_prp ->
+    (forall t, P t -> forall s, P s -> P (ty_arr t s)) ->
+    (forall t, P t) ->
+    forall t, P t.
 
   Axiom ty_rec_prp : forall P p a d, ty_rec P p a d ty_prp = p.
   Axiom ty_rec_arr : forall P p a d A B,
     ty_rec P p a d (ty_arr A B) = a _ (ty_rec P p a d A) _ (ty_rec P p a d B).
+  Declare Instance ty_prp_dec x : Decision (x = ty_prp).
+
+  Parameter context : Set.
+  Declare Instance context_lookup : Lookup nat ty context.
+  Parameter appel : context -> ty -> context.
 End TY.
 
 (** Global notation declarations. *)
@@ -44,15 +55,15 @@ Declare Custom Entry stlc_ty.
 Module TyTheories (Ty : TY).
   Export Ty.
 
-  Definition context := list ty.
-
-  Notation "<[ x ]>" := x (x custom stlc_ty) : stlc_scope.
+  Notation "-[ x ]-" := x (x custom stlc_ty) : stlc_scope.
   Notation "x" := x (in custom stlc_ty at level 0, x global) : stlc_scope.
   Notation "A -> B" := (ty_arr A B)
     (in custom stlc_ty at level 99, right associativity) : stlc_scope.
   Notation "( t )" := t
     (in custom stlc_ty at level 0, t custom stlc_ty) : stlc_scope.
   Notation "'o'" := ty_prp (in custom stlc_ty at level 0) : stlc_scope.
+
+  Infix "::" := appel (at level 60) : stlc_scope.
 End TyTheories.
 
 Module TyChurch <: TY.
@@ -60,79 +71,44 @@ Module TyChurch <: TY.
     | tyc_prp : tyc
     | tyc_obj : tyc
     | tyc_arr : tyc -> tyc -> tyc.
-  Print tyc_rect.
-  Check tyc_rec (fun t => nat).
 
   Definition ty := tyc.
   Definition ty_prp := tyc_prp.
   Definition ty_arr := tyc_arr.
 
   Instance eq_ty_dec : EqDecision ty.
-  Proof. solve_decision. Qed.
-
-  Fixpoint eqb_ty S T :=
-    match S, T with
-    | tyc_arr A1 B1, tyc_arr A2 B2 => andb (eqb_ty A1 A2) (eqb_ty B1 B2)
-    | tyc_prp, tyc_prp => true
-    | tyc_obj, tyc_obj => true
-    | _, _ => false
-    end.
-  
-  Theorem eqb_ty_eq A B : eqb_ty A B = true -> A = B.
-  Proof.
-    generalize dependent B.
-    induction A; simpl in *; destruct B;
-      try discriminate; try reflexivity.
-    intros H. erewrite IHA1, IHA2.
-    - reflexivity.
-    - destruct (eqb_ty A2 B2); try reflexivity.
-      rewrite Bool.andb_false_r in H. discriminate.
-    - destruct (eqb_ty A1 B1); try reflexivity.
-      simpl in *. discriminate.
-  Qed.
+  Proof. solve_decision. Defined.
 
   Definition ty_rec :
     forall P : ty -> Set,
-      P ty_prp ->
-      (forall t, P t -> forall s, P s -> P (ty_arr t s)) ->
-      (forall t, P t) ->
-      forall t, P t :=
-      fun P p a d => tyc_rec P p (d tyc_obj) a.
+    P ty_prp ->
+    (forall t, P t -> forall s, P s -> P (ty_arr t s)) ->
+    (forall t, P t) ->
+    forall t, P t :=
+    fun P p a d => tyc_rec P p (d tyc_obj) a.
+
+  Definition ty_ind :
+    forall P : ty -> Prop,
+    P ty_prp ->
+    (forall t, P t -> forall s, P s -> P (ty_arr t s)) ->
+    (forall t, P t) ->
+    forall t, P t :=
+    fun P p a d => tyc_ind P p (d tyc_obj) a.
 
   Theorem ty_rec_prp P p a d : ty_rec P p a d ty_prp = p.
   Proof. reflexivity. Qed.
-
-  Theorem eqb_ty_spec A B : reflect (A = B) (eqb_ty A B).
-  Proof.
-    generalize dependent B.
-    induction A; simpl in *; destruct B;
-      try constructor; try discriminate; try reflexivity.
-    destruct (IHA1 B1), (IHA2 B2); subst; constructor;
-      try (intros E; injection E; auto).
-    reflexivity.
-  Qed.
-
-  Definition is_ty_arr t :=
-    match t with
-    | tyc_arr A B => Some (A, B)
-    | _ => None
-    end.
-
-  Theorem is_ty_arr_ty_arr A B :
-    is_ty_arr (ty_arr A B) = Some (A, B).
-  Proof. reflexivity. Qed.
-
-  Theorem ty_arr_is_ty_arr A B t :
-    is_ty_arr t = Some (A, B) -> t = ty_arr A B.
-  Proof.
-    intros H. destruct t; simpl in *; try discriminate.
-    injection H. intros. subst. reflexivity.
-  Qed.
 
   Theorem ty_rec_arr P p a d A B :
     ty_rec P p a d (ty_arr A B) =
     a _ (ty_rec P p a d A) _ (ty_rec P p a d B).
   Proof. reflexivity. Qed.
+
+  Instance ty_prp_dec x : Decision (x = ty_prp).
+  Proof. solve_decision. Qed.
+
+  Definition context := list ty.
+  Instance context_lookup : Lookup nat ty context := fun k m => nth_error m k.
+  Definition appel (l : list ty) x := app l (cons x nil).
 End TyChurch.
 
 Module TyChurchTheories.
@@ -142,10 +118,10 @@ Module TyChurchTheories.
   Notation "'i'" := tyc_obj (in custom stlc_ty at level 0) : stlc_scope.
 
   (** Examples *)
-  Check <[ o ]>.
-  Check <[ o -> i ]>.
-  Check <[ o -> (i -> o) ]>.
-  Check <[ (o -> i) -> o ]>.
+  Check -[ o ]-.
+  Check -[ o -> i ]-.
+  Check -[ o -> (i -> o) ]-.
+  Check -[ (o -> i) -> o ]-.
 End TyChurchTheories.
 
 
@@ -206,54 +182,67 @@ Module Stlc (Ty : TY).
   (**************)
 
   Inductive has_type : context -> tm -> ty -> Prop :=
-    | t_lvl c n T : nth_error c n = Some T -> has_type c n T
-    | t_abs c A B t : has_type (c ++ [A]) t B ->
+    | t_lvl c n T : c !! n = Some T -> has_type c (tm_lvl n) T
+    | t_abs c A B t : has_type (c :: A) t B ->
         has_type c (tm_abs A t) (ty_arr A B)
     | t_app c A B s t : has_type c s (ty_arr A B) -> has_type c t A ->
         has_type c (tm_app s t) B
     | t_bot c : has_type c tm_bot ty_prp
     | t_top c : has_type c tm_top ty_prp
-    | t_and c : has_type c tm_and <[ o -> o -> o ]>
-    | t_or  c : has_type c tm_or  <[ o -> o -> o ]>
-    | t_imp c : has_type c tm_imp <[ o -> o -> o ]>
-    | t_for c T : has_type c (tm_for T) <[ (T -> o) -> o ]>
-    | t_ex  c T : has_type c (tm_ex  T) <[ (T -> o) -> o ]>.
+    | t_and c : has_type c tm_and -[ o -> o -> o ]-
+    | t_or  c : has_type c tm_or  -[ o -> o -> o ]-
+    | t_imp c : has_type c tm_imp -[ o -> o -> o ]-
+    | t_for c T : has_type c (tm_for T) -[ (T -> o) -> o ]-
+    | t_ex  c T : has_type c (tm_ex  T) -[ (T -> o) -> o ]-.
 
   Fixpoint type_check (c : context) (t : tm) : option ty :=
     match t with
-    | tm_lvl n => nth_error c n
+    | tm_lvl n => c !! n
     | tm_abs A t =>
-        match type_check (c ++ [A]) t with
-        | Some B => Some <[ A -> B ]>
+        match type_check (c :: A) t with
+        | Some B => Some -[ A -> B ]-
         | _ => None
         end
     | tm_app s t =>
         match type_check c s, type_check c t with
         | Some AR, Some A1 =>
-            ty_rec _ None (fun A _ B _ => if decide (A = A1) then Some B else None) (fun t => None) AR
+            ty_rec _ None (fun A _ B _ =>
+            if decide (A = A1) then Some B else None) (fun t => None) AR
         | _, _ => None
         end
     | tm_bot => Some ty_prp
     | tm_top => Some ty_prp
-    | tm_and => Some <[ o -> o -> o ]>
-    | tm_or  => Some <[ o -> o -> o ]>
-    | tm_imp => Some <[ o -> o -> o ]>
-    | tm_for T => Some <[ (T -> o) -> o ]>
-    | tm_ex  T => Some <[ (T -> o) -> o ]>
+    | tm_and => Some -[ o -> o -> o ]-
+    | tm_or  => Some -[ o -> o -> o ]-
+    | tm_imp => Some -[ o -> o -> o ]-
+    | tm_for T => Some -[ (T -> o) -> o ]-
+    | tm_ex  T => Some -[ (T -> o) -> o ]-
     end.
 
   Theorem type_check_sound c t T :
     type_check c t = Some T -> has_type c t T.
   Proof.
-    generalize dependent c.
-    generalize dependent T.
-    induction t; intros T c TC;
-      try (simpl in TC; injection TC; intros <-; constructor).
+    generalize dependent c. generalize dependent T.
+    induction t as [|s IHs t IHt| | | | | | | |];
+    intros T c TC; try (simpl in TC; injection TC;
+      intros <-; constructor).
     - now constructor.
-    - remember (type_check c t1) as T1.
-      remember (type_check c t2) as T2.
-      simpl in TC. rewrite <- HeqT1, <- HeqT2 in TC.
-      destruct T1, T2; try discriminate.
+    - simpl in TC.
+      destruct (type_check c s) as [s1|] eqn : Es;
+        [|discriminate].
+      destruct (type_check c t) as [t1|] eqn : Et;
+        [|discriminate].
+      apply ty_ind.
+      econstructor.
+      + apply IHs.
+      destruct (type_check c s), (type_check c t) eqn : E;
+        try discriminate.
+
+      apply ty_ind.
+      +
+      destruct (decide (t0 = ty_prp)); subst;
+        [now rewrite ty_rec_prp in TC|].
+      destruct t0.
       remember (is_ty_arr t0) as it.
       destruct it eqn : E; try discriminate.
       destruct p. symmetry in Heqit.
@@ -609,3 +598,11 @@ Module Stlc (Ty : TY).
           now rewrite sub_diag.
   Qed.
 End Stlc.
+
+Module StlcChurch.
+  Module Stlc := Stlc TyChurch.
+  Import Stlc.
+  Import TyChurchTheories.
+
+  Compute type_check [-[ i -> o ]-; tyc_obj] <{ 0 1 }>.
+End StlcChurch.
