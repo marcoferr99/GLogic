@@ -1,4 +1,4 @@
-From stdpp Require Import decidable list.
+From stdpp Require Export decidable list.
 
 
 (***********************************)
@@ -62,7 +62,7 @@ Module TyTheories (Ty : TY).
     (in custom stlc_ty at level 0, t custom stlc_ty) : stlc_scope.
   Notation "'o'" := ty_prp (in custom stlc_ty at level 0) : stlc_scope.
 
-  Notation "l +: e" := (l ++ [e]) (at level 60) : stlc_scope.
+  Notation "l +: e" := (l ++ [e]) (at level 50) : stlc_scope.
 
   Create HintDb ty.
   Hint Rewrite ty_rec_prp ty_rec_arr : ty.
@@ -165,7 +165,7 @@ Module Stlc (Ty : TY).
     (in custom stlc_tm at level 10, left associativity) : stlc_scope.
   Notation "\: A , t" := (tm_abs A t)
     (in custom stlc_tm at level 200, A custom stlc_ty,
-    t custom stlc_tm at level 200, left associativity) : stlc_scope.
+      t custom stlc_tm at level 200, left associativity) : stlc_scope.
   Notation "_|" := (tm_bot)
     (in custom stlc_tm at level 0) : stlc_scope.
   Notation "^|" := (tm_top)
@@ -176,6 +176,12 @@ Module Stlc (Ty : TY).
     (in custom stlc_tm at level 60, left associativity) : stlc_scope.
   Notation "x > y" := (tm_imp x y)
     (in custom stlc_tm at level 70, left associativity) : stlc_scope.
+  Notation "'for' T , t" := (tm_app (tm_for T) (tm_abs T t))
+    (in custom stlc_tm at level 200, T custom stlc_ty,
+      t custom stlc_tm at level 200, left associativity) : stlc_scope.
+  Notation "'ex' T , t" := (tm_app (tm_ex T) (tm_abs T t))
+    (in custom stlc_tm at level 200, T custom stlc_ty,
+      t custom stlc_tm at level 200, left associativity) : stlc_scope.
   Coercion tm_lvl : nat >-> tm.
 
 
@@ -290,9 +296,17 @@ Module Stlc (Ty : TY).
   Qed.
 
 
+  (*********************************)
+  (** ** Free variable permutation *)
+  (*********************************)
+
+
   (********************)
   (** ** Substitution *)
   (********************)
+
+  Notation "|( l )|" := (length l) : stlc_scope.
+  Definition lvl_seq start len := tm_lvl <$> seq start len.
 
   Fixpoint change_bound f m (t : tm) : tm :=
     match t with
@@ -335,6 +349,9 @@ Module Stlc (Ty : TY).
         tm_abs T (subst (m+1) ((incr_bound m <$> l) +: tm_lvl m) t)
     | const => const
     end.
+
+  Definition subst_ind m n k t :=
+    subst m ((lvl_seq 0 n ++ lvl_seq (n + 1) k) +: t).
 
 
   Theorem has_type_incr_bound1 C D c t T :
@@ -497,6 +514,21 @@ Module Stlc (Ty : TY).
            rewrite @lookup_app_r; [|lia].
            now rewrite Nat.sub_diag.
   Qed.
+
+  Check has_type_subst1.
+  Theorem has_type_subst_ind1 C D E S T t s :
+    has_type (C +: T ++ D) s S ->
+    has_type (E) t T ->
+    has_type (C ++ E ++ D)
+      (subst_ind |(C ++ E ++ D)| |(C)| |(D)| t s) S.
+  Proof.
+    intros Hs Ht.
+    eapply has_type_subst1; [|eassumption]. clear Hs.
+    apply Forall2_app; [|repeat constructor; assumption].
+    clear Ht.
+    induction C.
+    - simpl.
+
 End Stlc.
 
 
