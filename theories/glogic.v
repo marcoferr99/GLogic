@@ -1,5 +1,4 @@
 Require Import stlc.
-Require Import Lia.
 
 
 (*************************)
@@ -10,17 +9,15 @@ Module GLogic (Ty : TY).
   Module Stlc := Stlc Ty.
   Import Stlc.
 
-  Record judgement : Set := {
-    jd_context : context;
-    jd_tm : tm
+  Record judgement : Set := jd_build {
+    jd_cnt : context;
+    jd_tm  : tm
   }.
 
   Definition wf_judgement C j :=
-    match j with
-    | Build_judgement c t => has_type (C ++ c) t ty_prp
-    end.
+    match j with | jd_build c t => has_type (C ++ c) t ty_prp end.
 
-  Record sequent : Set := {
+  Record sequent : Set := sq_build {
     sq_context : context;
     sq_premises : list judgement;
     sq_conclusion : judgement
@@ -28,120 +25,104 @@ Module GLogic (Ty : TY).
 
   Definition wf_sequent s :=
     match s with
-    | Build_sequent C l j => wf_judgement C j /\ Forall (wf_judgement C) l
+    | sq_build C l j => wf_judgement C j /\ Forall (wf_judgement C) l
     end.
 
-  Notation "|( sig ; l --> B )|" := (Build_sequent sig l B)
-    (sig custom stlc_ty, l custom stlc_ty, B custom stlc_ty).
-  Notation "c :> t" := (Build_judgement c t)
+  (*Notation "|( sig ; l --> B )|" := (sq_build sig l B)
+    (sig custom stlc_ty, l custom stlc_ty, B custom stlc_ty).*)
+  Notation "c :> t" := (jd_build c t)
     (at level 70, t custom stlc_tm at level 60) : stlc_scope.
 
   Inductive is_derivable : sequent -> Prop :=
     | rl_init C c t :
         has_type (C ++ c) t ty_prp ->
-        is_derivable (Build_sequent C [c :> t] (c :> t))
+        is_derivable (sq_build C [c :> t] (c :> t))
     | rl_cut C l m b c :
-        is_derivable (Build_sequent C l b) ->
-        is_derivable (Build_sequent C (b :: m) c) ->
-        is_derivable (Build_sequent C (l ++ m) c)
+        is_derivable (sq_build C l b) ->
+        is_derivable (sq_build C (b :: m) c) ->
+        is_derivable (sq_build C (l ++ m) c)
     | rl_cL C l b c :
-        is_derivable (Build_sequent C (b :: b :: l) c) ->
-        is_derivable (Build_sequent C (b :: l) c)
+        is_derivable (sq_build C (b :: b :: l) c) ->
+        is_derivable (sq_build C (b :: l) c)
     | rl_wL C c l b t :
         has_type (C ++ c) t ty_prp ->
-        is_derivable (Build_sequent C l b) ->
-        is_derivable (Build_sequent C (c :> t :: l) b)
+        is_derivable (sq_build C l b) ->
+        is_derivable (sq_build C ((c :> t) :: l) b)
     | rl_botL C c d t :
         has_type (C ++ c) t ty_prp ->
-        is_derivable (Build_sequent C [d :> tm_bot] (c :> t))
+        is_derivable (sq_build C [d :> tm_bot] (c :> t))
     | rl_topR C c :
-        is_derivable (Build_sequent C [] (c :> tm_top))
+        is_derivable (sq_build C [] (c :> tm_top))
     | rl_andL1 C c l b t s :
         has_type (C ++ c) t ty_prp ->
-        is_derivable (Build_sequent C (c :> s :: l) b) ->
-        is_derivable (Build_sequent C (c :> (tm_and s t) :: l) b)
+        is_derivable (sq_build C ((c :> s) :: l) b) ->
+        is_derivable (sq_build C ((c :> tm_and s t) :: l) b)
     | rl_andL2 C c l b t s :
         has_type (C ++ c) s ty_prp ->
-        is_derivable (Build_sequent C (c :> t :: l) b) ->
-        is_derivable (Build_sequent C (c :> (tm_and s t) :: l) b)
+        is_derivable (sq_build C ((c :> t) :: l) b) ->
+        is_derivable (sq_build C ((c :> tm_and s t) :: l) b)
     | rl_andR C c l t s :
-        is_derivable (Build_sequent C l (c :> s)) ->
-        is_derivable (Build_sequent C l (c :> t)) ->
-        is_derivable (Build_sequent C l (c :> tm_and s t))
+        is_derivable (sq_build C l (c :> s)) ->
+        is_derivable (sq_build C l (c :> t)) ->
+        is_derivable (sq_build C l (c :> tm_and s t))
     | rl_orL C c l b t s :
-        is_derivable (Build_sequent C (c :> s :: l) b) ->
-        is_derivable (Build_sequent C (c :> t :: l) b) ->
-        is_derivable (Build_sequent C (c :> tm_or s t :: l) b)
+        is_derivable (sq_build C (c :> s :: l) b) ->
+        is_derivable (sq_build C (c :> t :: l) b) ->
+        is_derivable (sq_build C ((c :> tm_or s t) :: l) b)
     | rl_orR1 C c l t s :
         has_type (C ++ c) t ty_prp ->
-        is_derivable (Build_sequent C l (c :> s)) ->
-        is_derivable (Build_sequent C l (c :> tm_or s t))
+        is_derivable (sq_build C l (c :> s)) ->
+        is_derivable (sq_build C l (c :> tm_or s t))
     | rl_orR2 C c l t s :
         has_type (C ++ c) s ty_prp ->
-        is_derivable (Build_sequent C l (c :> t)) ->
-        is_derivable (Build_sequent C l (c :> tm_or s t))
+        is_derivable (sq_build C l (c :> t)) ->
+        is_derivable (sq_build C l (c :> tm_or s t))
     | rl_impL C c l B t s :
-        is_derivable (Build_sequent C l (c :> s)) ->
-        is_derivable (Build_sequent C (c :> t :: l) B) ->
-        is_derivable (Build_sequent C ((c :> tm_imp s t) :: l) B)
+        is_derivable (sq_build C l (c :> s)) ->
+        is_derivable (sq_build C ((c :> t) :: l) B) ->
+        is_derivable (sq_build C ((c :> tm_imp s t) :: l) B)
     | rl_impR C c l t s :
-        is_derivable (Build_sequent C (c :> s :: l) (c :> t)) ->
-        is_derivable (Build_sequent C l (c :> tm_imp s t))
-    | rl_forL C c T l B s :
+        is_derivable (sq_build C ((c :> s) :: l) (c :> t)) ->
+        is_derivable (sq_build C l (c :> tm_imp s t))
+    | rl_forL C c T l B t s :
         has_type (C ++ c) t T ->
-        is_derivable (Build_sequent C ((c :> $(subst (length (C ++ c)) (map tm_lvl (seq 0 (length (C ++ c))) ++ [t]) s)) :: l) B) ->
-        is_derivable (Build_sequent C (c :> $(tm_for T) $(tm_abs T s) :: l) B)
+        is_derivable (sq_build C
+          ((c :> $(subst_ind |(C ++ c)| |(C ++ c)| 0 t s)) :: l) B) ->
+        is_derivable (sq_build C ((c :> for T, s) :: l) B)
+    | rl_forR C c S l s :
+        is_derivable (sq_build (C +: foldr ty_arr S c) l (c :> $(
+          subst_ind (|(C ++ c)| + 1) |(C)| |(c)|
+            (foldl tm_app (tm_lvl |(C)|) (lvl_seq (|(C)| + 1) |(c)|)) s
+        ))) ->
+        is_derivable (sq_build C l (c :> for S, s))
+    | rl_exL C c S l B s :
+        is_derivable (sq_build (C +: foldr ty_arr S c) ((c :> $(
+          subst_ind (|(C ++ c)| + 1) |(C)| |(c)|
+            (foldl tm_app (tm_lvl |(C)|) (lvl_seq (|(C)| + 1) |(c)|)) s
+        )) :: l) B) ->
+        is_derivable (sq_build C ((c :> ex S, s) :: l) B)
+    | rl_exR C c T l t s :
+        has_type (C ++ c) t T ->
+        is_derivable (sq_build C l (c :> $(subst_ind |(C ++ c)| |(C ++ c)| 0 t s))) ->
+        is_derivable (sq_build C l (c :> ex T, s))
   .
 
-  Theorem th K : is_derivable K -> wf_sequent K.
+  Theorem is_derivable_wf K : is_derivable K -> wf_sequent K.
   Proof.
-    intros D. induction D; simpl in *.
-    - split; [assumption|].
-      constructor; [assumption|constructor].
-    - destruct IHD2. split; [assumption|].
-      apply Forall_app. split; [intuition|].
-      now inversion H0.
-    - destruct IHD. split; [assumption|].
-      now inversion H0.
-    - destruct IHD. split; [assumption|].
-      constructor; assumption.
-    - split; [assumption|].
-      repeat constructor.
-    - split; constructor.
-    - destruct IHD. split; [assumption|].
-      inversion H1. subst. constructor; [|assumption].
-      simpl. econstructor; [|eassumption].
-      econstructor; [constructor|assumption].
-    - destruct IHD. split; [assumption|].
-      inversion H1; subst. constructor; [|assumption].
-      simpl. econstructor; [|eassumption].
-      econstructor; [constructor|assumption].
-    - intuition.
-      econstructor; [|eassumption].
-      econstructor; [constructor|assumption].
-    - intuition.
-      inversion H0. inversion H2. subst.
-      constructor; [|assumption].
-      econstructor; [|eassumption].
-      econstructor; [constructor|assumption].
-    - intuition.
-      econstructor; [|eassumption].
-      econstructor; [constructor|assumption].
-    - intuition.
-      econstructor; [|eassumption].
-      econstructor; [constructor|assumption].
-    - intuition.
-      inversion H2. subst.
-      constructor; [|assumption].
-      econstructor; [|eassumption].
-      econstructor; [constructor|assumption].
-    - destruct IHD. inversion H0. subst.
-      intuition.
-      econstructor; [|eassumption].
-      econstructor; [constructor|assumption].
-    - intuition. inversion H1. subst.
-      constructor; [|assumption].
+    intros D. induction D; simpl in *; intuition;
+    try solve [
+      try match goal with
+        [H : _ |- _] => inversion H; clear H; subst
+      end; try assumption;
+      repeat econstructor; eassumption
+    ].
+    - inversion H2. now apply Forall_app.
+    - inversion H0. inversion H2. subst.
+      repeat (econstructor; try eassumption).
+    - inversion H1. subst. clear H1.
+      constructor; [|assumption]. clear D H5.
       econstructor; constructor.
+      unfold subst_ind in *. rewrite Nat.add_0_r in H4.
       eapply has_type_subst2 in H4; try eassumption.
       + repeat rewrite length_app. simpl. lia.
       + apply Forall2_app.
