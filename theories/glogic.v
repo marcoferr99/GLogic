@@ -120,8 +120,44 @@ Module GLogic (Ty : TY).
     - inversion H0. inversion H2. subst.
       repeat (econstructor; try eassumption).
     - inversion H1. subst. clear H1.
-      constructor; [|assumption]. clear D H5.
+      constructor; [|assumption]. clear D H5 H0.
       econstructor; constructor.
+      eapply has_type_subst2; try eassumption;
+        [repeat rewrite length_app; simpl; lia|].
+      apply Forall2_app; [|repeat constructor; assumption].
+      unfold lvl_seq at 2. simpl. rewrite app_nil_r.
+      generalize (has_type_seq [] (C ++ c) []).
+      rewrite app_nil_r. simpl. auto.
+    - econstructor; constructor.
+      eapply has_type_subst2.
+      3:{
+        replace (|(C ++ c)| + 1) with
+          |(C +: foldr ty_arr S c ++ c)| in H;
+          [|repeat rewrite length_app; simpl; lia].
+        apply H.
+      }
+      + repeat rewrite length_app. simpl. lia.
+      + repeat apply Forall2_app.
+        * generalize (has_type_seq []). intros HS.
+          simpl in HS. rewrite <- app_assoc. apply HS.
+        * generalize (has_type_seq (C +: foldr ty_arr S c) c []).
+          rewrite length_app. rewrite app_nil_r.
+          simpl. intros HS. apply HS.
+        * repeat constructor.
+          clear dependent l s.
+          induction c.
+          -- simpl. constructor.
+             replace (C +: S ++ []) with (C ++ S :: []);
+               [|symmetry; apply app_nil_r].
+             now apply list_lookup_middle.
+          -- simpl.
+             Search lookup length.
+          eapply has_type_subst2.
+          inversion H0; subst.
+          -- destruct D.
+      + apply (has_type_seq []).
+      unfold wf_judgement in *.
+      eapply has_type_subst_ind2.
       unfold subst_ind in *. rewrite Nat.add_0_r in H4.
       eapply has_type_subst2 in H4; try eassumption.
       + repeat rewrite length_app. simpl. lia.
