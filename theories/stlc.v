@@ -191,10 +191,10 @@ Module Stlc (Ty : TY).
 
   Inductive has_type : context -> tm -> ty -> Prop :=
     | t_lvl c n T : c !! n = Some T -> has_type c (tm_lvl n) T
-    | t_abs c A B t : has_type (c +: A) t B ->
-        has_type c (tm_abs A t) (ty_arr A B)
     | t_app c A B s t : has_type c s (ty_arr A B) -> has_type c t A ->
         has_type c (tm_app s t) B
+    | t_abs c A B t : has_type (c +: A) t B ->
+        has_type c (tm_abs A t) (ty_arr A B)
     | t_bot c : has_type c tm_bot ty_prp
     | t_top c : has_type c tm_top ty_prp
     | t_and c : has_type c tm_and -[ o -> o -> o ]-
@@ -203,20 +203,24 @@ Module Stlc (Ty : TY).
     | t_for c T : has_type c (tm_for T) -[ (T -> o) -> o ]-
     | t_ex  c T : has_type c (tm_ex  T) -[ (T -> o) -> o ]-.
 
+  Notation "<| gam |- t : T |>" := (has_type gam t T)
+    (at level 0, gam custom stlc_ty at level 200,
+    t custom stlc_tm, T custom stlc_ty) : stlc_scope.
+
   Fixpoint type_check (c : context) (t : tm) : option ty :=
     match t with
     | tm_lvl n => c !! n
-    | tm_abs A t =>
-        match type_check (c +: A) t with
-        | Some B => Some -[ A -> B ]-
-        | _ => None
-        end
     | tm_app s t =>
         match type_check c s, type_check c t with
         | Some AR, Some A1 =>
             ty_rec _ None (fun A _ B _ =>
             if decide (A = A1) then Some B else None) (fun t => None) AR
         | _, _ => None
+        end
+    | tm_abs A t =>
+        match type_check (c +: A) t with
+        | Some B => Some -[ A -> B ]-
+        | _ => None
         end
     | tm_bot => Some ty_prp
     | tm_top => Some ty_prp
@@ -226,10 +230,6 @@ Module Stlc (Ty : TY).
     | tm_for T => Some -[ (T -> o) -> o ]-
     | tm_ex  T => Some -[ (T -> o) -> o ]-
     end.
-
-  Notation "<| gam |- t : T |>" := (has_type gam t T)
-    (at level 0, gam custom stlc_ty at level 200,
-    t custom stlc_tm, T custom stlc_ty) : stlc_scope.
 
   Theorem type_check_sound c t T :
     type_check c t = Some T -> has_type c t T.
@@ -294,11 +294,6 @@ Module Stlc (Ty : TY).
     intros HT. inversion HT. subst.
     eapply lookup_lt_Some. eassumption.
   Qed.
-
-
-  (*********************************)
-  (** ** Free variable permutation *)
-  (*********************************)
 
 
   (********************)
@@ -368,7 +363,7 @@ Module Stlc (Ty : TY).
         match goal with [H : _ |- _] => rewrite <- H end.
         f_equal. simpl. lia.
       + rewrite <- app_assoc.
-        rewrite (lookup_app_l C) in *; try assumption; lia.
+        rewrite @lookup_app_l in *; try assumption; lia.
     - eauto.
     - eauto.
     - rewrite <- app_assoc.
@@ -414,16 +409,9 @@ Module Stlc (Ty : TY).
   Theorem has_type_app C c t T : has_type C t T ->
     has_type (C +: c) (incr_bound (length C) t) T.
   Proof.
-    intros HT.
-    generalize dependent T. generalize dependent C.
-    induction t; simpl; intros C T HT;
-      inversion HT; subst; try constructor.
-    - destruct (decide (length C <= n)).
-      + rewrite @lookup_ge_None_2 in H1;
-          [discriminate|assumption].
-      + now apply lookup_app_l_Some.
-    - eapply t_app; eauto.
-    - apply has_type_switch. auto.
+    intros. rewrite <- (app_nil_r (C +: c)).
+    apply has_type_incr_bound1.
+    now rewrite app_nil_r.
   Qed.
 
   Theorem has_type_subst1 C T S t s :
@@ -439,14 +427,12 @@ Module Stlc (Ty : TY).
     - generalize dependent s. generalize dependent n.
       induction S as [|h t IH]; intros n HT Hn s F;
         [now rewrite @lookup_nil in Hn|].
-      destruct s;
-        [apply Forall2_length in F; discriminate|].
+      destruct s; [apply Forall2_length in F; discriminate|].
       inversion F. subst.
       destruct n as [|n]; simpl in *;
         [injection Hn; intros; now subst|].
       destruct (Nat.ltb_spec n (length s)).
-      + rewrite nth_indep with (d' := tm_lvl n);
-          [|assumption].
+      + rewrite nth_indep with (d' := tm_lvl n); [|assumption].
         apply IH; try assumption.
         constructor. inversion HT. now subst.
       + rewrite lookup_ge_None_2 in Hn; [discriminate|].
@@ -470,14 +456,14 @@ Module Stlc (Ty : TY).
   Qed.
 
   Theorem has_type_subst2 C T S t s :
-    length C <= length S ->
     Forall2 (fun si Si => has_type C si Si) s S ->
+    length C <= length S ->
     has_type C (subst (length C) s t) T ->
     has_type S t T.
   Proof.
     generalize dependent s. generalize dependent S.
     generalize dependent T. generalize dependent C.
-    induction t; simpl; intros C T S s L F HT;
+    induction t; simpl; intros C T S s F L HT;
       try solve [inversion HT; constructor].
     - assert (exists A, has_type S n A). {
         destruct (Nat.ltb_spec n (length S)).
@@ -501,7 +487,6 @@ Module Stlc (Ty : TY).
           [|apply length_app].
         rewrite length_app. simpl. apply H3.
       }
-      + repeat rewrite length_app. simpl. lia.
       + apply Forall2_app.
         -- clear dependent B L. generalize dependent s.
            induction S; intros s F; destruct s;
@@ -513,22 +498,57 @@ Module Stlc (Ty : TY).
         -- constructor; constructor.
            rewrite @lookup_app_r; [|lia].
            now rewrite Nat.sub_diag.
+      + repeat rewrite length_app. simpl. lia.
   Qed.
 
-  Check has_type_subst1.
-  Theorem has_type_subst_ind1 C D E S T t s :
-    has_type (C +: T ++ D) s S ->
-    has_type (E) t T ->
-    has_type (C ++ E ++ D)
-      (subst_ind |(C ++ E ++ D)| |(C)| |(D)| t s) S.
+  Theorem has_type_seq C D E :
+    Forall2 (fun si Si => has_type (C ++ D ++ E) si Si)
+      (lvl_seq |(C)| |(D)|) D.
   Proof.
-    intros Hs Ht.
-    eapply has_type_subst1; [|eassumption]. clear Hs.
-    apply Forall2_app; [|repeat constructor; assumption].
-    clear Ht.
-    induction C.
-    - simpl.
+    generalize dependent E.
+    induction D using rev_ind; intros E; [constructor|].
+    unfold lvl_seq.
+    rewrite length_app, seq_app, fmap_app. simpl.
+    apply Forall2_app; [now rewrite <- app_assoc|].
+    repeat constructor.
+    replace (C ++ D +: x ++ E) with ((C ++ D) ++ x :: E);
+      [|now repeat rewrite <- app_assoc].
+    apply list_lookup_middle. symmetry. apply length_app.
+  Qed.
 
+  (*
+  Theorem has_type_subst_ind1 C D E T A t a :
+    has_type (C ++ E ++ D) a A ->
+    has_type ((C ++ D) +: A) t T ->
+    has_type (C ++ E ++ D)
+      (subst_ind |(C ++ E ++ D)| |(C)| |(D)| a t) T.
+  Proof.
+    intros Ha Ht.
+    eapply has_type_subst1; [|eassumption].
+    apply Forall2_app; [|repeat constructor; assumption].
+    apply Forall2_app; [apply (has_type_seq []) |].
+    generalize (has_type_seq (C ++ E) D []).
+    rewrite app_nil_r, length_app. auto.
+  Qed.
+  *)
+
+  (*
+  Theorem has_type_subst_ind2 C D E T A t a :
+    has_type (C ++ E ++ D) a A ->
+    has_type (C ++ E ++ D)
+      (subst_ind |(C ++ E ++ D)| |(C)| |(D)| a t) T ->
+    has_type ((C ++ D) +: A) t T.
+  Proof.
+    intros Ha Ht.
+    eapply has_type_subst2; [| |eassumption];
+      [repeat rewrite length_app; simpl; lia|].
+    apply Forall2_app; [|repeat constructor; assumption].
+    apply Forall2_app.
+    - rewrite <- app_assoc. apply (has_type_seq []).
+    - generalize (has_type_seq (C +: c) D []).
+      rewrite app_nil_r, length_app. auto.
+  Qed.
+  *)
 End Stlc.
 
 
