@@ -47,7 +47,7 @@
 \newcommand*{\sequent}[3]{#1; #2 \longrightarrow #3}
 \newcommand*{\infcondr}[1]{\quad \text{\small #1}}
 \newcommand*{\inflab}[3]{\inferrule{#1}{#2} \text{ #3}}
-\newcommand*{\incr}[1]{#1_+}
+\newcommand*{\incrbound}[1]{#1^+}
 \newcommand*{\subst}[3]{#1 \, [#3]_{#2}}
 
 \newcommand*{\listappel}[2]{#1, #2}
@@ -57,6 +57,7 @@
 \newcommand*{\listempty}{[\;]}
 \newcommand*{\listsep}{; \,}
 \newcommand*{\length}[1]{|#1|}
+\newcommand*{\dotlist}[3]{#1_{#2}, \dots, #1_{#3}}
 
 
 \begin{document}
@@ -74,7 +75,7 @@ Taking inspiration from \cite{church:types} and \cite{pierce:plf} we define the 
 That is, $\typrp$ is a type, $\tyind$ is a type and given two types $A$ and $B$, the expression $A \rightarrow B$ is also a type.
 The type $\typrp$ represents the type of propositions, $\tyind$ represents the type of individuals and $A \rightarrow B$ represents the type of functions from $A$ to $B$.
 
-Some examples:
+Some examples of types:
 \[
     \typrp \qquad
     \tyarr{\typrp}{\tyind} \qquad
@@ -91,18 +92,19 @@ where $\lvln$ is a natural number, $T$ is a type and $\alpha$ is one of the foll
 \[
     \inddef{\alpha}{\bot \mid \top \mid \land \mid \lor \mid \tmimp{}{}}
 \]
-Some examples:
+Some examples of terms:
 \[
     \tmabs{\tyind}{0} \qquad
     \tmapp{(\tmabs{\tyarr{\tyind}{\typrp}}{2})}{1} \qquad
-    \tmabs{\typrp}{\tmapp{3}{\bot}} \qquad
-    \tmabs{\tyarr{\typrp}{\typrp}}{\tmabs{\tyind}{\tmapp{0}{\top}}}
+    \tmabs{\typrp}{\tmapp{3}{\lor}} \qquad
+    \tmabs{\tyarr{\typrp}{\typrp}}{\tmabs{\tyind}{\tmapp{0}{\top}}} \qquad
+    \tmapp{\tmfors{o}}{\bot}
 \]
 
 The interpretation of a term depends on a fixed number $m$ of free variables.
 All the levels which are less then $m$ represent free variables, while the others represent bound variables.
 For example, if the free variables are $2$ (that is, the levels $0$ and $1$), the terms $\tmabs{\tyind}{0}$ and $\tmapp{(\tmabs{\tyarr{\tyind}{\typrp}}{2})}{1}$ can be interpreted respectively as $\lambda \, x \colon \tyind, y$ and $\tmapp{(\lambda \, x \colon \tyarr{\tyind}{\typrp}, x)}{y}$.
-If the free variables are $0$, then $\tmabs{\tyind}{0}$ corresponds to $\lambda \, x \colon \tyind, x$, while the term $\tmapp{(\tmabs{\tyarr{\tyind}{\typrp}}{2})}{1}$ makes no sense, because $1$ and $2$ should be bound variables.
+If the free variables are $0$, then $\tmabs{\tyind}{0}$ corresponds to $\lambda \, x \colon \tyind, x$, while the term $\tmapp{(\tmabs{\tyarr{\tyind}{\typrp}}{2})}{1}$ makes no sense, because $1$ and $2$ should be two distinct bound variables.
 
 
 \subsection{Typing}
@@ -156,69 +158,58 @@ Some examples:
 
 \subsection{Substitution}
 
-The substitution of the list of term $s$ with context $m$ into the term $t$, indicated as $\subst{t}{m}{s}$, is defined recursively as follows:
+The substitution of the terms $s_0, \dots, s_n$ with context $m$ into the term $t$, indicated as $\subst{t}{m}{s_0, \dots, s_n}$, is defined recursively as follows:
 \begin{gather*}
-    \inddef{\subst{n}{m}{s}}{\nth{s}{n}} \infcondr{if $n \in \mathbb{N}$ and $n < \length{s}$} \\
-    \inddef{\subst{n}{m}{s}}{n} \infcondr{if $n \in \mathbb{N}$ and $n \ge \length{s}$} \\
+    \inddef{\subst{i}{m}{s_0, \dots, s_n}}{s_i} \infcondr{if $i \in \mathbb{N}$ and $i \le n$} \\
+    \inddef{\subst{i}{m}{s_0, \dots, s_n}}{i} \infcondr{if $i \in \mathbb{N}$ and $i > n$} \\
     %
-    \inddef{\subst{(\tmapp{t_1}{t_2})}{m}{s}}{\tmapp{(\subst{t_1}{m}{s})}{(\subst{t_2}{m}{s})}} \\
+    \inddef{\subst{(\tmapp{t_1}{t_2})}{m}{s_0, \dots, s_n}}{\tmapp{(\subst{t_1}{m}{s_0, \dots, s_n})}{(\subst{t_2}{m}{s_0, \dots, s_n})}} \\
     %
-    \inddef{\subst{(\tmabs{T}{t})}{m}{s}}{\tmabs{T}{(\subst{t}{m}{\incr{s}})}}
+    \inddef{\subst{(\tmabs{T}{t})}{m}{s_0, \dots, s_n}}{\tmabs{T}{(\subst{t}{m+1}{\incrbound{s_0}, \dots, \incrbound{s_n}, m})}} \\
+    %
+    \inddef{\subst{t}{m}{s_0, \dots, s_n}}{t} \infcondr{in all other cases}
 \end{gather*}
+where $\incrbound{s_k}$ is the term obtained from $s_k$ by increasing all of its bound levels by one, with respect to a context with $m$ free variables.
 
 Some examples:
-\[
-    \subst{(\tmabs{\typrp}{\tmapp{1}{0}})}{1}{\tmabs{\tyind}{1} \listsep 0} =
-    \tmabs{\typrp}{\tmapp{0}{(\tmabs{\tyind}{2})}}
-\]
-\[
-    \subst{(\tmabs{\typrp}{\tmapp{1}{0}})}{2}{\tmabs{\tyind}{1} \listsep 0} =
-    \tmabs{\typrp}{\tmapp{0}{(\tmabs{\tyind}{1})}}
-\]
-\[
-    \subst{(\tmabs{\typrp}{0})}{2}{\tmabs{\tyind}{\tmapp{0}{1}}} =
-    \tmabs{\typrp}{\tmabs{\tyind}{\tmapp{0}{1}}}
-\]
-\[
-    \subst{(\tmabs{\typrp}{0})}{1}{\tmabs{\tyind}{\tmapp{0}{1}}} =
-    \tmabs{\typrp}{\tmabs{\tyind}{\tmapp{0}{2}}}
-\]
-\[
-    \subst{(\tmabs{\typrp}{0})}{0}{\tmabs{\tyind}{\tmapp{0}{0}}} =
-    \tmabs{\typrp}{\tmabs{\tyind}{\tmapp{1}{1}}}
-\]
-\[
-    \subst{(\tmabs{\typrp}{\tmapp{1}{0}})}{0}{\top} =
-    \tmabs{\typrp}{(\subst{(\tmapp{1}{0})}{0}{\top})} =
-    \tmabs{\typrp}{\tmapp{1}{\top}}
-\]
-\[
+\begin{gather*}
+    \subst{(\tmapp{1}{0})}{2}{\tmabs{\tyind}{0} \listsep 1} =
+    \tmapp{(\subst{1}{2}{\tmabs{\tyind}{0} \listsep 1})}{(\subst{0}{2}{\tmabs{\tyind}{0} \listsep 1})} =
+    \tmapp{1}{(\tmabs{\tyind}{0})} \\
+    %
     \subst{(\tmabs{\typrp}{\tmapp{1}{0}})}{2}{\tmabs{\tyind}{0} \listsep 1} =
-    \tmabs{\typrp}{(\subst{(\tmapp{1}{0})}{2}{\tmabs{\tyind}{0} \listsep 1})} =
-    \tmabs{\typrp}{\tmapp{1}{(\tmabs{\tyind}{0})}}
-\]
-\[
-    \subst{(\tmabs{\typrp}{0})}{1}{0} = \tmabs{\typrp}{(\subst{0}{2}{0 \listsep 1})}
-\]
+    \tmabs{\typrp}{(\subst{(\tmapp{1}{0})}{3}{\tmabs{\tyind}{0} \listsep 1 \listsep 2})} =
+    \tmabs{\typrp}{\tmapp{1}{(\tmabs{\tyind}{0})}} \\
+    %
+    \subst{(\tmabs{\typrp}{\tmapp{1}{0}})}{2}{\tmabs{\tyind}{0}} =
+    \tmabs{\typrp}{(\subst{(\tmapp{1}{0})}{3}{\tmabs{\tyind}{0} \listsep 2})} =
+    \tmabs{\typrp}{\tmapp{2}{(\tmabs{\tyind}{0})}} \\
+    %
+    \subst{(\tmabs{\typrp}{0})}{2}{\tmabs{\tyind}{\tmapp{0}{1}}} =
+    \tmabs{\typrp}{(\subst{0}{3}{\tmabs{\tyind}{\tmapp{0}{1}} \listsep 2})} =
+    \tmabs{\typrp}{\tmabs{\tyind}{\tmapp{0}{1}}} \\
+    %
+    \subst{(\tmabs{\typrp}{0})}{1}{\tmabs{\tyind}{\tmapp{0}{1}}} =
+    \tmabs{\typrp}{(\subst{0}{2}{\tmabs{\tyind}{\tmapp{0}{2}} \listsep 1})} =
+    \tmabs{\typrp}{\tmabs{\tyind}{\tmapp{0}{2}}} \\
+    %
+    \subst{(\tmabs{\typrp}{0})}{0}{\tmabs{\tyind}{\tmapp{0}{0}}} =
+    \tmabs{\typrp}{(\subst{0}{1}{\tmabs{\tyind}{\tmapp{1}{1}} \listsep 0})} =
+    \tmabs{\typrp}{\tmabs{\tyind}{\tmapp{1}{1}}} \\
+\end{gather*}
 
-In a substitution $\subst{t}{m}{s}$, the resulting term and all the terms in the list $s$ are meant to be interpreted with $m$ free variables, while the term $t$ is meant to be interpreted with a number of free variables equal to the length of $s$.
+In a substitution $\subst{t}{m}{s_0, \dots, s_n}$, the resulting term and all the terms $s_0, \dots, s_n$ are meant to be interpreted with $m$ free variables, while the term $t$ is meant to be interpreted with $n+1$ free variables.
 
 \begin{theorem}
-    If for every $i = 1, \dots, n$ we have that $\hastype{\listdelim{T_1 \listsep \dots \listsep T_m}}{s_i}{S_i}$
-    and $\hastype{\listdelim{S_1 \listsep \dots \listsep S_n}}{t}{T}$
-    then $\hastype{\listdelim{T_1 \listsep \dots \listsep T_m}}{\subst{t}{m}{s_1 \listsep \dots \listsep s_n}}{T}$.
+    Let $\dotlist{T}{1}{m}$ and $\dotlist{S}{1}{n}$ be types and let $t$ and $\dotlist{s}{1}{n}$ be terms such that $\hastype{\listdelim{T_1 \listsep \dots \listsep T_m}}{s_i}{S_i}$ for every $i = 1, \dots, n$.
+    If $\hastype{\listdelim{S_1 \listsep \dots \listsep S_n}}{t}{T}$ then $\hastype{\listdelim{T_1 \listsep \dots \listsep T_m}}{\subst{t}{m}{s_1 \listsep \dots \listsep s_n}}{T}$.
 \end{theorem}
 
-\begin{proof}
-    If $t = \tmabs{A}{a}$ then
-    \[
-        \subst{t}{m}{s_1 \listsep \dots \listsep s_n} =
-        \subst{(\tmabs{A}{a})}{m}{s_1 \listsep \dots \listsep s_n} =
-        \tmabs{A}{(\subst{a}{m}{s_1^+ \listsep \dots \listsep s_n^+ \listsep n})}
-    \]
-    and $T = \tyarr{A}{B}$.
-    Thus, $\hastype{\listdelim{S_1 \listsep \dots \listsep S_n \listsep A}}{a}{B}$.
-\end{proof}
+\begin{theorem}
+    Let $\dotlist{T}{1}{m}$ and $\dotlist{S}{1}{n}$ be types and let $t$ and $\dotlist{s}{1}{n}$ be terms such that $\hastype{\listdelim{T_1 \listsep \dots \listsep T_m}}{s_i}{S_i}$ for every $i = 1, \dots, n$.
+    If $m \le n$ and $\hastype{\listdelim{T_1 \listsep \dots \listsep T_m}}{\subst{t}{m}{s_1 \listsep \dots \listsep s_n}}{T}$
+    then $\hastype{\listdelim{S_1 \listsep \dots \listsep S_n}}{t}{T}$.
+\end{theorem}
 
 For example, $\hastype{\listdelim{\typrp}}{0}{\typrp}$ and $\hastype{\listdelim{\tyind}}{\top}{\typrp}$ and $\hastype{\listdelim{\tyind}}{\subst{0}{1}{\top}}{\typrp}$, that is, $\hastype{\listdelim{\tyind}}{\top}{\typrp}$.
 
