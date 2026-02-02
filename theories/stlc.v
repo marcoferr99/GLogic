@@ -67,6 +67,18 @@ Module TyTheories (Ty : TY).
   Create HintDb ty.
   Hint Rewrite ty_rec_prp ty_rec_arr : ty.
   Ltac tysimpl := simpl in *; autorewrite with ty in *.
+
+  Theorem ty_arr_inj A B C D :
+    ty_arr A B = ty_arr C D -> A = C /\ B = D.
+  Proof.
+    intros H. split.
+    - apply (f_equal (ty_rec _ ty_prp (fun A _ B _ => A)
+        (fun _ => ty_prp))) in H.
+      now tysimpl.
+    - apply (f_equal (ty_rec _ ty_prp (fun A _ B _ => B)
+        (fun _ => ty_prp))) in H.
+      now tysimpl.
+  Qed.
 End TyTheories.
 
 Module TyChurch <: TY.
@@ -345,8 +357,7 @@ Module Stlc (Ty : TY).
     | const => const
     end.
 
-  Definition subst_ind m n k t :=
-    subst m ((lvl_seq 0 n ++ lvl_seq (n + 1) k) +: t).
+  Definition subst_last m s := subst m (lvl_seq 0 m +: s).
 
 
   Theorem has_type_incr_bound1 C D c t T :
@@ -516,6 +527,17 @@ Module Stlc (Ty : TY).
     apply list_lookup_middle. symmetry. apply length_app.
   Qed.
 
+  Theorem has_type_subst_last C T X s t :
+    has_type (C +: T) t X -> has_type C s T ->
+    has_type C (subst_last (length C) s t) X.
+  Proof.
+    intros Ht Hs.
+    eapply has_type_subst1; [|eassumption].
+    apply Forall2_app; [|now repeat constructor].
+    generalize (has_type_seq [] C []).
+    now rewrite app_nil_r.
+  Qed.
+
   (*
   Theorem has_type_subst_ind1 C D E T A t a :
     has_type (C ++ E ++ D) a A ->
@@ -549,6 +571,64 @@ Module Stlc (Ty : TY).
       rewrite app_nil_r, length_app. auto.
   Qed.
   *)
+
+
+  (*****************)
+  (** ** Reduction *)
+  (*****************)
+
+  Fixpoint beta_reduction m (t : tm) : tm :=
+    match t with
+    | tm_app (tm_abs T t) s =>
+        subst_last m (beta_reduction m s) (beta_reduction (m + 1) t)
+    | tm_app s t => tm_app (beta_reduction m s) (beta_reduction m t)
+    | tm_abs T t => tm_abs T (beta_reduction (m + 1) t)
+    | x => x
+    end.
+
+  (*
+  Fixpoint eta_reduction m (t : tm) {struct t} : tm :=
+    match t with
+    | tm_abs T (tm_app t (tm_lvl n)) =>
+        if decide (n = m) then t else tm_abs T (eta_reduction (m + 1) (tm_app t (tm_lvl n)))
+    | tm_app s t => tm_app (eta_reduction m s) (eta_reduction m t)
+    | tm_abs T t => tm_abs T (eta_reduction (m + 1) t)
+    | x => x
+    end.*)
+
+  Theorem has_type_beta_reduction C T t :
+    has_type C t T ->
+    has_type C (beta_reduction (length C) t) T.
+  Proof.
+    generalize dependent T. generalize dependent C.
+    induction t; intros C T HT; try assumption.
+    - destruct t1; try solve
+        [inversion HT; subst; econstructor; eauto].
+      inversion HT. subst.
+      simpl. eapply has_type_subst_last; [|eauto].
+      apply IHt1 in H2. simpl in H2. inversion H2. subst.
+      apply ty_arr_inj in H5. destruct H5. now subst.
+    - inversion HT. subst.
+      simpl. constructor.
+      specialize IHt with (C +: t) B.
+      rewrite length_app in IHt. simpl in IHt. auto.
+  Qed.
+
+  (*Theorem has_type_eta_reduction C T t :
+    has_type C t T ->
+    has_type C (eta_reduction (length C) t) T.
+  Proof.
+    generalize dependent T. generalize dependent C.
+    induction t; intros C T HT; try assumption.
+    - inversion HT. subst. econstructor; eauto.
+    - destruct t0; try solve
+        [inversion HT; subst; econstructor; eauto].
+      + destruct t0_2.
+        2:{ simpl. inversion HT. subst.
+          edestruct (IHt C).
+          apply IHt in H3. simpl in *.
+          inversion H3. subst. simpl.
+        simpl. inversion H3. subst.*)
 End Stlc.
 
 
@@ -579,4 +659,9 @@ Module StlcChurch.
   Compute subst 2 [tm_lvl 0; <{ \: i, 1 2 }>] <{ \: o, 1 }>.
   Compute subst 0 [tm_lvl 0; tm_lvl 1; <{ \: i, 0 0 }>] <{ \: o, \: i, 2 2 }>.
   Compute subst 0 [ tm_top ] <{ \: o, 1 }>.
+
+  (** Reduction *)
+  Compute beta_reduction 1 <{ (\: o, 1) 0 }>.
+  Compute beta_reduction 0 <{ (\: o -> o, 0) (\: o, 0) }>.
+  Compute beta_reduction 0 <{ (\: o -> o, 0) ((\: o -> o, 0) (\: o, 0)) }>.
 End StlcChurch.
