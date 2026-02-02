@@ -307,7 +307,6 @@ Module Stlc (Ty : TY).
     eapply lookup_lt_Some. eassumption.
   Qed.
 
-
   (********************)
   (** ** Substitution *)
   (********************)
@@ -404,7 +403,7 @@ Module Stlc (Ty : TY).
       now rewrite app_assoc.
   Qed.
 
-  Theorem has_type_switch C c d t T :
+  Theorem has_type_swap C c d t T :
     has_type (C +: c +: d)
       (incr_bound (length (C +: c)) t) T ->
     has_type (C +: d +: c) (incr_bound (length C) t) T.
@@ -577,6 +576,40 @@ Module Stlc (Ty : TY).
   (** ** Reduction *)
   (*****************)
 
+  Fixpoint contains_lvl n t :=
+    match t with
+    | tm_lvl m => Nat.eqb m n
+    | tm_abs T s => contains_lvl n s
+    | tm_app s1 s2 => orb (contains_lvl n s1) (contains_lvl n s2)
+    | _ => false
+    end.
+
+  Theorem contains_lvl_has_type C D c d t T :
+    contains_lvl (length C) t = false ->
+    has_type (C ++ c :: D) t T ->
+    has_type (C ++ d :: D) t T.
+  Proof.
+    generalize dependent T.
+    generalize dependent D.
+    induction t; intros D T HC HT;
+      inversion HT; subst; econstructor; simpl in *.
+    - destruct (Nat.ltb_spec n (length C)).
+      + rewrite @lookup_app_l in *; assumption.
+      + apply Nat.eqb_neq in HC.
+        assert (E : forall x, C ++ x :: D = (C +: x) ++ D);
+          [intros; now rewrite <- app_assoc|].
+        rewrite E in *.
+        rewrite @lookup_app_r in *; rewrite length_app in *;
+          simpl in *; try assumption; lia.
+    - eapply IHt1; [|eassumption].
+      destruct (contains_lvl (length C) t1); [|reflexivity].
+      rewrite orb_true_l in HC. discriminate.
+    - eapply IHt2; [|eassumption].
+      destruct (contains_lvl (length C) t2); [|reflexivity].
+      rewrite orb_true_r in HC. discriminate.
+    - rewrite <- app_assoc in *. eapply IHt; eassumption.
+  Qed.
+
   Fixpoint beta_reduction m (t : tm) : tm :=
     match t with
     | tm_app (tm_abs T t) s =>
@@ -586,15 +619,17 @@ Module Stlc (Ty : TY).
     | x => x
     end.
 
-  (*
   Fixpoint eta_reduction m (t : tm) {struct t} : tm :=
     match t with
     | tm_abs T (tm_app t (tm_lvl n)) =>
-        if decide (n = m) then t else tm_abs T (eta_reduction (m + 1) (tm_app t (tm_lvl n)))
+        if andb (Nat.eqb n m) (negb (contains_lvl m t)) then
+          change_bound (fun x => x - 1) m t
+          else tm_abs T (tm_app (eta_reduction (m + 1) t) n)
     | tm_app s t => tm_app (eta_reduction m s) (eta_reduction m t)
     | tm_abs T t => tm_abs T (eta_reduction (m + 1) t)
     | x => x
-    end.*)
+    end.
+
 
   Theorem has_type_beta_reduction C T t :
     has_type C t T ->
@@ -614,7 +649,7 @@ Module Stlc (Ty : TY).
       rewrite length_app in IHt. simpl in IHt. auto.
   Qed.
 
-  (*Theorem has_type_eta_reduction C T t :
+  Theorem has_type_eta_reduction C T t :
     has_type C t T ->
     has_type C (eta_reduction (length C) t) T.
   Proof.
@@ -623,12 +658,46 @@ Module Stlc (Ty : TY).
     - inversion HT. subst. econstructor; eauto.
     - destruct t0; try solve
         [inversion HT; subst; econstructor; eauto].
-      + destruct t0_2.
-        2:{ simpl. inversion HT. subst.
-          edestruct (IHt C).
-          apply IHt in H3. simpl in *.
-          inversion H3. subst. simpl.
-        simpl. inversion H3. subst.*)
+      2:{
+          inversion HT. subst.
+          assert (IH := IHt (C +: t)).
+          rewrite length_app in IH.
+          simpl. constructor. now apply IH.
+        }
+      + inversion HT. subst.
+        assert (IH := IHt (C +: t)).
+        rewrite length_app in IH. simpl in IH.
+        destruct t0_2; try solve [constructor; auto]. simpl.
+        destruct (Nat.eqb_spec n |(C)|);
+        destruct (contains_lvl |(C)| t0_1) eqn : E;
+          try solve [constructor; auto].
+        simpl in *. inversion H3. subst.
+        inversion H5. subst.
+        rewrite @lookup_app_r in H1; [|lia].
+        rewrite Nat.sub_diag in H1. simpl in H1.
+        injection H1. intros. subst.
+        rewrite <- (app_nil_r C) at 1.
+        eapply has_type_incr_bound2.
+        unfold incr_bound.
+        replace (change_bound _ _ _) with t0_1;
+          [rewrite app_nil_r; eassumption|].
+        clear dependent B A IHt.
+        induction t0_1; simpl in *; try reflexivity.
+        * destruct (Nat.eqb_spec n |(C)|); [discriminate|].
+          destruct (decide (|(C)| <= n)).
+          -- destruct (decide (|(C)| <= n - 1)); [|lia].
+             f_equal. lia.
+          -- destruct (decide (|(C)| <= n)); [|reflexivity].
+             lia.
+        * rewrite <- IHt0_1_2, <- IHt0_1_1; try reflexivity.
+          -- destruct (contains_lvl _ t0_1_1);
+               [|reflexivity].
+             now rewrite orb_true_l in E.
+          -- destruct (contains_lvl _ t0_1_2);
+               [|reflexivity].
+             now rewrite orb_true_r in E.
+        * now rewrite <- IHt0_1.
+  Qed.
 End Stlc.
 
 
