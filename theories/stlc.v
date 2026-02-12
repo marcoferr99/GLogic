@@ -307,6 +307,7 @@ Module Stlc (Ty : TY).
     eapply lookup_lt_Some. eassumption.
   Qed.
 
+
   (********************)
   (** ** Substitution *)
   (********************)

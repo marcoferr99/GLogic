@@ -48,6 +48,7 @@
 \newcommand*{\infcondr}[1]{\quad \text{\small #1}}
 \newcommand*{\inflab}[3]{\inferrule{#1}{#2} \text{ #3}}
 \newcommand*{\incrbound}[1]{#1^+}
+\newcommand*{\decrbound}[1]{#1^-}
 \newcommand*{\subst}[3]{#1 \, [#3]_{#2}}
 
 \newcommand*{\listappel}[2]{#1, #2}
@@ -58,6 +59,9 @@
 \newcommand*{\listsep}{; \,}
 \newcommand*{\length}[1]{|#1|}
 \newcommand*{\dotlist}[3]{#1_{#2}, \dots, #1_{#3}}
+
+\newcommand*{\betared}[2]{\mathrm{red}_{\beta}^{#1}#2}
+\newcommand*{\etared}[2]{\mathrm{red}_{\eta}^{#1}#2}
 
 
 \begin{document}
@@ -212,6 +216,25 @@ In a substitution $\subst{t}{m}{s_0, \dots, s_n}$, the resulting term and all th
 \end{theorem}
 
 For example, $\hastype{\listdelim{\typrp}}{0}{\typrp}$ and $\hastype{\listdelim{\tyind}}{\top}{\typrp}$ and $\hastype{\listdelim{\tyind}}{\subst{0}{1}{\top}}{\typrp}$, that is, $\hastype{\listdelim{\tyind}}{\top}{\typrp}$.
+
+
+\subsection{Reduction}
+
+We define the $\beta$-reduction of a term recursively as follows:
+\begin{gather*}
+    \inddef{\betared{m}{\tmapp{(\tmabs{T}{t})}{s}}}{\subst{\bigl(\betared{m+1}{t}\bigr)}{m}{0 \listsep \dots \listsep m - 1 \listsep \betared{m}{s}}} \\
+    \inddef{\betared{m}{\tmapp{s}{t}}}{\tmapp{\bigl(\betared{m}{s}\bigr)}{\bigl(\betared{m}{t}\bigr)}} \\
+    \inddef{\betared{m}{(\tmabs{T}{t})}}{\tmabs{T}{\bigl(\betared{m+1}{t}\bigr)}} \\
+    \inddef{\betared{m}{t}}{t}
+\end{gather*}
+
+We define the $\eta$-reduction of a term recursively as follows:
+\begin{gather*}
+    \inddef{\etared{m}{\tmabs{T}{\tmapp{t}{m}}}}{\decrbound{t}} \\
+    \inddef{\etared{m}{\tmapp{s}{t}}}{}
+    \inddef{\etared{m}{t}}{t}
+\end{gather*}
+where $\decrbound{t}$ is the term obtained from $t$ by decreasing all of its bound levels by one, with respect to a context with $m$ free variables.
 
 
 \section{G Logic}
