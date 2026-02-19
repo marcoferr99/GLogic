@@ -159,6 +159,13 @@ Some examples:
     }
 \end{gather*}
 
+We could, for example, define $s \lor t$ as a ``primitive'' term, with the typing rule:
+\[
+    \inferrule{\hastype{\Gamma}{s}{\typrp} \\ \hastype{\Gamma}{t}{\typrp}}{\hastype{\Gamma}{s \lor t}{\typrp}} \\
+\]
+and similarly for all the other constant terms.
+However, especially in formalization, it is easier to have a small core of basic terms to prove properties of (levels, abstraction and application), and have any additional terms simply as constants.
+
 
 \subsection{Substitution}
 
@@ -174,6 +181,8 @@ The substitution of the terms $s_0, \dots, s_n$ with context $m$ into the term $
     \inddef{\subst{t}{m}{s_0, \dots, s_n}}{t} \infcondr{in all other cases}
 \end{gather*}
 where $\incrbound{s_k}$ is the term obtained from $s_k$ by increasing all of its bound levels by one, with respect to a context with $m$ free variables.
+
+If we had defined terms like $s \lor t$ as primitive, we would have had to give explicit rules for them in the substitution definition.
 
 Some examples:
 \begin{gather*}
@@ -222,19 +231,28 @@ For example, $\hastype{\listdelim{\typrp}}{0}{\typrp}$ and $\hastype{\listdelim{
 
 We define the $\beta$-reduction of a term recursively as follows:
 \begin{gather*}
-    \inddef{\betared{m}{\tmapp{(\tmabs{T}{t})}{s}}}{\subst{\bigl(\betared{m+1}{t}\bigr)}{m}{0 \listsep \dots \listsep m - 1 \listsep \betared{m}{s}}} \\
-    \inddef{\betared{m}{\tmapp{s}{t}}}{\tmapp{\bigl(\betared{m}{s}\bigr)}{\bigl(\betared{m}{t}\bigr)}} \\
+    \inddef{\betared{m}{(\tmapp{(\tmabs{T}{t})}{s})}}{\subst{\bigl(\betared{m+1}{t}\bigr)}{m}{0 \listsep \dots \listsep m - 1 \listsep \betared{m}{s}}} \\
+    \inddef{\betared{m}{(\tmapp{s}{t})}}{\tmapp{\bigl(\betared{m}{s}\bigr)}{\bigl(\betared{m}{t}\bigr)}} \\
     \inddef{\betared{m}{(\tmabs{T}{t})}}{\tmabs{T}{\bigl(\betared{m+1}{t}\bigr)}} \\
     \inddef{\betared{m}{t}}{t}
 \end{gather*}
 
 We define the $\eta$-reduction of a term recursively as follows:
 \begin{gather*}
-    \inddef{\etared{m}{\tmabs{T}{\tmapp{t}{m}}}}{\decrbound{t}} \\
-    \inddef{\etared{m}{\tmapp{s}{t}}}{}
+    \inddef{\etared{m}{(\tmabs{T}{\tmapp{t}{m}})}}{\decrbound{t}} \infcondr{if $t$ does not contain $m$} \\
+    \inddef{\etared{m}{(\tmapp{s}{t})}}{\tmapp{\bigl(\etared{m}{s})}{\bigl(\etared{m}{t})}} \\
+    \inddef{\etared{m}{(\tmabs{T}{t})}}{\tmabs{T}{\bigl(\etared{m+1}{t}\bigr)}} \\
     \inddef{\etared{m}{t}}{t}
 \end{gather*}
 where $\decrbound{t}$ is the term obtained from $t$ by decreasing all of its bound levels by one, with respect to a context with $m$ free variables.
+
+\begin{theorem}
+    If $\hastype{\Gamma}{t}{T}$ then $\hastype{\Gamma}{\betared{\length{\Gamma}}{t}}{T}$.
+\end{theorem}
+
+\begin{theorem}
+    If $\hastype{\Gamma}{t}{T}$ then $\hastype{\Gamma}{\etared{\length{\Gamma}}{t}}{T}$.
+\end{theorem}
 
 
 \section{G Logic}
