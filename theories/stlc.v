@@ -1,4 +1,5 @@
 From stdpp Require Export decidable list.
+Import Nat.
 
 
 (***********************************)
@@ -9,6 +10,187 @@ From stdpp Require Export decidable list.
 (**************)
 (** ** Syntax *)
 (**************)
+
+(** Global notation declarations. *)
+Declare Scope stlc_scope.
+Delimit Scope stlc_scope with stlc.
+Open Scope stlc_scope.
+Declare Custom Entry stlc_ty.
+
+
+(** Reverse list interface *)
+Module Type RLIST.
+  Parameter rlist : Type -> Type.
+
+  Parameter rlength : forall {A}, rlist A -> nat.
+
+  Declare Instance rlist_lookup {A} : Lookup nat A (rlist A).
+  Axiom is_Some_lookup : forall {A} (c : rlist A) n,
+    is_Some (c !! n) <-> n < rlength c.
+
+  Parameter rcons : forall {A}, rlist A -> A -> rlist A.
+  Axiom rlength_rcons :
+    forall {A} (c : rlist A) t, rlength (rcons c t) = S (rlength c).
+  Axiom lookup_rcons_eq : forall {A} (c : rlist A) t n,
+    n = rlength c -> rcons c t !! n = Some t.
+  Axiom lookup_rcons_lt : forall {A} (c : rlist A) t n,
+    n < rlength c -> rcons c t !! n = c !! n.
+
+  (** Build a list from its length and its (total) lookup function *)
+  Parameter build_rlist : forall {A}, nat -> (nat -> A) -> rlist A.
+  Axiom rlength_build_rlist : forall {A} n (f : nat -> A),
+    rlength (build_rlist n f) = n.
+  Axiom lookup_build_rlist : forall {A} l (f : nat -> A) n,
+    n < l -> build_rlist l f !! n = Some (f n).
+
+  Declare Instance rlist_fmap : FMap rlist.
+  Axiom lookup_fmap : forall {A} {B} (f : A -> B) (l : rlist A) n,
+    (f <$> l) !! n = f <$> l !! n.
+End RLIST.
+
+Module RlistTheories (Rlist : RLIST).
+  Export Rlist.
+
+  Notation "l +: e" := (rcons l e) (at level 50) : stlc_scope.
+  Notation "|( c )|" := (rlength c) : stlc_scope.
+
+
+  Definition lookup_default {A} d n (c : rlist A) : A :=
+    match c !! n with
+    | None => d
+    | Some x => x
+    end.
+
+  Theorem lookup_None1 {A} (c : rlist A) n :
+    n >= |(c)| -> c !! n = None.
+  Proof.
+    intros H.
+    destruct (c !! n) eqn : E; [|reflexivity].
+    assert (n < |(c)|); [|lia].
+    apply is_Some_lookup.
+    econstructor. eassumption.
+  Qed.
+
+  Theorem lookup_None2 {A} (c : rlist A) n :
+    c !! n = None -> n >= |(c)|.
+  Proof.
+    intros H.
+    destruct (decide (n < |(c)|)); [|lia].
+    apply is_Some_lookup in l. destruct l. now rewrite H in H0.
+  Qed.
+
+  Theorem lookup_rcons_gt : forall {A} (c : rlist A) t n,
+    n > |(c)| -> rcons c t !! n = None.
+  Proof.
+    intros. apply lookup_None1.
+    rewrite rlength_rcons. lia.
+  Qed.
+
+  Inductive lookup_rcons_cases {A} (c : rlist A) t n : Prop :=
+    | lookup_rcons_cases_lt (_ : n < |(c)|) (_ : (c +: t) !! n = c !! n)
+    | lookup_rcons_cases_eq (_ : n = |(c)|) (_ : (c +: t) !! n = Some t)
+    | lookup_rcons_cases_gt (_ : n > |(c)|) (_ : (c +: t) !! n = None).
+
+  Theorem lookup_rcons_spec {A} (c : rlist A) t n : lookup_rcons_cases c t n.
+  Proof.
+    destruct (lt_total n |(c)|) as [H | [H | H]].
+    - apply lookup_rcons_cases_lt; [assumption|].
+      now apply lookup_rcons_lt.
+    - apply lookup_rcons_cases_eq; [assumption|].
+      now apply lookup_rcons_eq.
+    - apply lookup_rcons_cases_gt; [assumption|].
+      now apply lookup_rcons_gt.
+  Qed.
+
+  Ltac lookup_rcons_spec c t n H E :=
+    destruct (lookup_rcons_spec c t n) as [H E | H E | H E]; rewrite E in *.
+
+  Theorem is_Some_rlength {A B} (l : rlist A) (h : rlist B) :
+    (forall n, is_Some (l !! n) <-> is_Some (h !! n)) ->
+    |(l)| = |(h)|.
+  Proof.
+    intros H. destruct (lt_total |(l)| |(h)|) as [E|[L|G]]; try assumption.
+    - apply is_Some_lookup in E. apply H in E.
+      apply is_Some_lookup in E. lia.
+    - apply is_Some_lookup in G. apply H in G.
+      apply is_Some_lookup in G. lia.
+  Qed.
+
+  Theorem rlength_fmap : forall {A} {B} (f : A -> B) l,
+    |(f <$> l)| = |(l)|.
+  Proof.
+    intros. apply is_Some_rlength.
+    intros. rewrite lookup_fmap. apply fmap_is_Some.
+  Qed.
+End RlistTheories.
+
+
+Module RlistList <: RLIST.
+  Definition rlist := list.
+  Definition rlength := @length.
+  Definition rcons {A} l (e : A) := l ++ [e].
+
+  Theorem rlength_rcons {A} :
+    forall (c : rlist A) t, length (rcons c t) = S (length c).
+  Proof.
+    intros. unfold rcons.
+    rewrite length_app. simpl. lia.
+  Qed.
+
+  Instance rlist_lookup {A} : Lookup nat A (rlist A) := list_lookup.
+
+  Theorem lookup_rcons_lt : forall {A} (c : rlist A) t n,
+    n < length c -> rcons c t !! n = c !! n.
+  Proof.
+    intros. unfold rcons.
+    now rewrite @lookup_app_l.
+  Qed.
+
+  Theorem is_Some_lookup {A} :
+    forall (c : rlist A) n, is_Some (c !! n) <-> n < length c.
+  Proof. apply lookup_lt_is_Some. Qed.
+
+  Theorem lookup_rcons_eq : forall {A} (c : rlist A) t n,
+    n = length c -> rcons c t !! n = Some t.
+  Proof.
+    intros. unfold rcons.
+    rewrite @lookup_app_r; [|lia].
+    subst. now rewrite sub_diag.
+  Qed.
+
+  Fixpoint build_rlist {A} n f : rlist A :=
+    match n with
+    | 0 => []
+    | S n => rcons (build_rlist n f) (f n)
+    end.
+
+  Theorem rlength_build_rlist : forall {A} n (f : nat -> A),
+    length (build_rlist n f) = n.
+  Proof.
+    intros. induction n; [reflexivity|].
+    simpl. unfold rcons.
+    rewrite length_app. rewrite IHn. simpl. lia.
+  Qed.
+
+  Theorem lookup_build_rlist : forall {A} n (f : nat -> A) x,
+    x < n -> build_rlist n f !! x = Some (f x).
+  Proof.
+    intros. induction n; [lia|].
+    simpl. unfold rcons.
+    destruct (decide (x = n)).
+    - subst. rewrite @lookup_app_r; rewrite rlength_build_rlist; [|lia].
+      now rewrite sub_diag.
+    - rewrite @lookup_app_l.
+      + apply IHn. lia.
+      + rewrite rlength_build_rlist. lia.
+  Qed.
+
+  Instance rlist_fmap : FMap rlist := list_fmap.
+
+  Theorem lookup_fmap : forall {A} {B} (f : A -> B) (l : rlist A) n,
+    (f <$> l) !! n = f <$> l !! n.
+  Proof. intros. apply list_lookup_fmap. Qed.
+End RlistList.
 
 
 (** *** Types *)
@@ -29,30 +211,24 @@ Module Type TY.
     (forall t, P t) ->
     forall t, P t.
 
-  Parameter ty_ind :
-    forall P : ty -> Prop,
-    P ty_prp ->
-    (forall t, P t -> forall s, P s -> P (ty_arr t s)) ->
-    (forall t, t <> ty_prp -> (forall A B, t <> ty_arr A B) -> P t) ->
-    forall t, P t.
-
   Axiom ty_rec_prp : forall P p a d, ty_rec P p a d ty_prp = p.
   Axiom ty_rec_arr : forall P p a d A B,
     ty_rec P p a d (ty_arr A B) = a _ (ty_rec P p a d A) _ (ty_rec P p a d B).
   Axiom ty_rec_neq : forall P p a d t,
     t <> ty_prp -> (forall A B, t <> ty_arr A B) -> ty_rec P p a d t = d t.
+
+  Axiom ty_ind :
+    forall P : ty -> Prop,
+    P ty_prp ->
+    (forall t, P t -> forall s, P s -> P (ty_arr t s)) ->
+    (forall t, t <> ty_prp -> (forall A B, t <> ty_arr A B) -> P t) ->
+    forall t, P t.
 End TY.
 
-(** Global notation declarations. *)
-Declare Scope stlc_scope.
-Delimit Scope stlc_scope with stlc.
-Open Scope stlc_scope.
-Declare Custom Entry stlc_ty.
-
-Module TyTheories (Ty : TY).
+Module TyTheories (Ty : TY) (Rlist : RLIST).
   Export Ty.
-
-  Definition context := list ty.
+  Module RlistTheories := RlistTheories Rlist.
+  Export RlistTheories.
 
   Notation "-[ x ]-" := x (x custom stlc_ty) : stlc_scope.
   Notation "x" := x (in custom stlc_ty at level 0, x global) : stlc_scope.
@@ -62,11 +238,14 @@ Module TyTheories (Ty : TY).
     (in custom stlc_ty at level 0, t custom stlc_ty) : stlc_scope.
   Notation "'o'" := ty_prp (in custom stlc_ty at level 0) : stlc_scope.
 
-  Notation "l +: e" := (l ++ [e]) (at level 50) : stlc_scope.
 
   Create HintDb ty.
   Hint Rewrite ty_rec_prp ty_rec_arr : ty.
-  Ltac tysimpl := simpl in *; autorewrite with ty in *.
+  Ltac ty_simpl := simpl in *; autorewrite with ty in *.
+
+
+  Definition ty_match {T : Set} p a d : ty -> T :=
+    ty_rec (fun _ => T) p (fun A _ B _ => a A B) (fun _ => d).
 
   Theorem ty_arr_inj A B C D :
     ty_arr A B = ty_arr C D -> A = C /\ B = D.
@@ -74,12 +253,16 @@ Module TyTheories (Ty : TY).
     intros H. split.
     - apply (f_equal (ty_rec _ ty_prp (fun A _ B _ => A)
         (fun _ => ty_prp))) in H.
-      now tysimpl.
+      now ty_simpl.
     - apply (f_equal (ty_rec _ ty_prp (fun A _ B _ => B)
         (fun _ => ty_prp))) in H.
-      now tysimpl.
+      now ty_simpl.
   Qed.
+
+
+  Definition context := rlist ty.
 End TyTheories.
+
 
 Module TyChurch <: TY.
   Inductive tyc : Set :=
@@ -109,7 +292,7 @@ Module TyChurch <: TY.
     (forall t, t <> ty_prp ->
       (forall A B, t <> ty_arr A B) -> P t) ->
     forall t, P t.
-  Proof. induction t; auto. Qed.
+  Proof. intros ? ? ? ? t. induction t; auto. Qed.
 
   Theorem ty_rec_prp P p a d : ty_rec P p a d ty_prp = p.
   Proof. reflexivity. Qed.
@@ -131,7 +314,7 @@ Module TyChurch <: TY.
 End TyChurch.
 
 Module TyChurchTheories.
-  Module TyTheories := TyTheories TyChurch.
+  Module TyTheories := TyTheories TyChurch RlistList.
   Import TyTheories.
 
   Notation "'i'" := tyc_obj (in custom stlc_ty at level 0) : stlc_scope.
@@ -148,8 +331,8 @@ End TyChurchTheories.
 
 Declare Custom Entry stlc_tm.
 
-Module Stlc (Ty : TY).
-  Module TyTheories := TyTheories Ty.
+Module Stlc (Ty : TY) (Rlist : RLIST).
+  Module TyTheories := TyTheories Ty Rlist.
   Export TyTheories.
 
   (** Terms using de Bruijn levels *)
@@ -224,9 +407,10 @@ Module Stlc (Ty : TY).
     | tm_lvl n => c !! n
     | tm_app s t =>
         match type_check c s, type_check c t with
-        | Some AR, Some A1 =>
-            ty_rec _ None (fun A _ B _ =>
-            if decide (A = A1) then Some B else None) (fun t => None) AR
+        | Some Ts, Some Tt =>
+            (ty_match None
+              (fun A B => if decide (A = Tt) then Some B else None) None
+            ) Ts
         | _, _ => None
         end
     | tm_abs A t =>
@@ -256,10 +440,10 @@ Module Stlc (Ty : TY).
         [|discriminate].
       destruct (type_check c t) as [B|] eqn : Et;
         [|discriminate].
-      destruct A as [|X _ Y _ |] using ty_ind;
-        tysimpl; try discriminate.
+      unfold ty_match in TC. destruct A as [|X _ Y _ |] using ty_ind;
+        ty_simpl; try discriminate.
       + destruct (decide (X = B)); [|discriminate].
-        injection TC. intros <-. subst.
+        injection TC. intros. subst.
         econstructor; eauto.
       + rewrite ty_rec_neq in TC; try assumption.
         discriminate.
@@ -277,15 +461,13 @@ Module Stlc (Ty : TY).
     generalize dependent T.
     induction t as [| s IHs t IHt | s t | | | | | | |];
       intros T c TC;
-      inversion TC; subst; try reflexivity; simpl.
-    - assumption.
+      inversion TC; subst; try easy; simpl.
     - erewrite IHs, IHt; try eassumption.
-      tysimpl. destruct (decide (A = A));
-        [reflexivity|contradiction].
-    - erewrite IHt; [reflexivity|eassumption].
+      unfold ty_match. ty_simpl. now destruct (decide (A = A)).
+    - now erewrite IHt.
   Qed.
 
-  Theorem type_check_has_type c t T :
+  Theorem type_check_iff c t T :
     has_type c t T <-> type_check c t = Some T.
   Proof.
     split; intros.
@@ -296,15 +478,154 @@ Module Stlc (Ty : TY).
   Theorem has_type_unique c t A B :
     has_type c t A -> has_type c t B -> A = B.
   Proof.
-    repeat rewrite type_check_has_type.
+    repeat rewrite type_check_iff.
     intros -> H. now injection H.
   Qed.
 
-  Theorem has_type_length c (n : nat) T :
-    has_type c n T -> n < length c.
+
+  (***************************)
+  (** ** Levels manipulation *)
+  (***************************)
+
+  (** Apply "f" to all variables in the term "t" *)
+  Fixpoint level_map (f : nat -> nat) (t : tm) : tm :=
+    match t with
+      | tm_lvl n => tm_lvl (f n)
+      | tm_app s t => tm_app (level_map f s) (level_map f t)
+      | tm_abs T t => tm_abs T (level_map f t)
+      | const => const
+    end.
+
+  Theorem level_map_f_eq f g t :
+    (forall n, f n = g n) -> level_map f t = level_map g t.
   Proof.
-    intros HT. inversion HT. subst.
-    eapply lookup_lt_Some. eassumption.
+    intros H. induction t; simpl; congruence.
+  Qed.
+
+  Definition free_level_map f m :=
+    level_map (fun n => if decide (n < m) then f n else n).
+
+  Theorem has_type_free_level_map f c d t T :
+    |(c)| = |(d)| -> (forall n, d !! f n = c !! n) ->
+    has_type c t T ->
+    has_type d (free_level_map f |(c)| t) T.
+  Proof.
+    generalize dependent T.
+    generalize dependent d. generalize dependent c.
+    generalize dependent f.
+    induction t as [| | t | | | | | | |];
+    intros f c d L T F HT; inversion HT; subst;
+      unfold free_level_map in *; simpl; try solve [constructor].
+    - destruct (decide (n < |(c)|)) as [Hn | Hn].
+      + constructor. now rewrite F.
+      + exfalso. apply Hn. apply is_Some_lookup.
+        econstructor. eassumption.
+    - econstructor; eauto.
+    - constructor.
+      erewrite level_map_f_eq.
+      + apply (IHt (fun n => if decide (n < |(c)|) then f n else n));
+          try eassumption; [repeat rewrite rlength_rcons; congruence|].
+        intros n.
+        destruct (decide (n < |(c)|)).
+        * repeat rewrite lookup_rcons_lt; try auto.
+          apply is_Some_lookup in l. destruct l.
+          eapply is_Some_lookup. econstructor.
+          rewrite F. eassumption.
+        * destruct (decide (n = |(c)|)).
+          -- subst. repeat rewrite lookup_rcons_eq; auto.
+          -- repeat rewrite lookup_None1; try reflexivity;
+               rewrite rlength_rcons; lia.
+      + intros n. simpl.
+        destruct (decide (n < |(c)|)), (decide (n < |(c +: t)|));
+          try reflexivity.
+        rewrite rlength_rcons in *. lia.
+  Qed.
+
+
+  (** Apply "f" to all bound variables in the term "t" *)
+  Definition bound_level_map f m :=
+    level_map (fun n => if decide (m <= n) then f n else n).
+
+  Theorem has_type_bound_level_map_impl1 l m c d t T :
+    (l <= |(c)|) ->
+    (|(d)| = m + |(c)|) ->
+    (forall n, n >= l -> d !! (m + n) = c !! n) ->
+    (forall n, n < l -> d !! n = c !! n) ->
+    has_type c t T ->
+    has_type d (bound_level_map (add m) l t) T.
+  Proof.
+    generalize dependent T.
+    generalize dependent d. generalize dependent c.
+    induction t as [| | t | | | | | | |];
+    intros c d T Hl L Hlg Hll Hc; inversion Hc; subst;
+    unfold bound_level_map in *; simpl; econstructor; try eauto.
+    - destruct (decide (l <= n)).
+      + now rewrite Hlg.
+      + rewrite Hll; [assumption|lia].
+    - eapply (IHt (c +: t)); try eassumption; try intros n Hn.
+      + rewrite rlength_rcons. lia.
+      + repeat rewrite rlength_rcons. lia.
+      + lookup_rcons_spec c t n Ic Ec; lookup_rcons_spec d t (m + n) Id Ed;
+          try lia; auto.
+      + lookup_rcons_spec c t n Ic Ec; lookup_rcons_spec d t n Id Ed;
+          try lia; auto.
+  Qed.
+
+  Theorem has_type_bound_level_map_impl2 l m c d t T :
+    (l <= |(c)|) ->
+    (|(d)| = m + |(c)|) ->
+    (forall n, n >= l -> d !! (m + n) = c !! n) ->
+    (forall n, n < l -> d !! n = c !! n) ->
+    has_type d (bound_level_map (add m) l t) T
+    ->
+    has_type c t T.
+  Proof.
+    generalize dependent T.
+    generalize dependent d. generalize dependent c.
+    induction t as [| | t | | | | | | |];
+    intros c d T Hl L Hlg Hll Hc; inversion Hc; subst;
+    unfold bound_level_map in *; simpl; econstructor; try eauto.
+    - destruct (decide (l <= n)).
+      + now rewrite <- Hlg.
+      + rewrite <- Hll; [assumption|lia].
+    - eapply (IHt (c +: t)); try eassumption; try intros n Hn.
+      + rewrite rlength_rcons. lia.
+      + repeat rewrite rlength_rcons. lia.
+      + lookup_rcons_spec c t n Ic Ec; lookup_rcons_spec d t (m + n) Id Ed;
+          try lia; auto.
+      + lookup_rcons_spec c t n Ic Ec; lookup_rcons_spec d t n Id Ed;
+          try lia; auto.
+  Qed.
+
+  Theorem has_type_bound_level_map1 m c d t T :
+    (|(d)| = m + |(c)|) ->
+    (forall n, n < |(c)| -> d !! n = c !! n) ->
+    has_type c t T ->
+    has_type d (bound_level_map (add m) |(c)| t) T.
+  Proof.
+    intros. eapply has_type_bound_level_map_impl1; try eassumption; [lia|].
+    intros n Hn. repeat rewrite lookup_None1; auto. lia.
+  Qed.
+
+  Theorem has_type_bound_level_map_S C c t T :
+    has_type C t T ->
+    has_type (C +: c) (bound_level_map S |(C)| t) T.
+  Proof.
+    intros Ht. unfold bound_level_map. erewrite level_map_f_eq.
+    - apply (has_type_bound_level_map1 1); try eassumption.
+      + rewrite rlength_rcons. lia.
+      + intros. rewrite lookup_rcons_lt; easy.
+    - intros. reflexivity.
+  Qed.
+
+  Theorem has_type_bound_level_map2 m c d t T :
+    (|(d)| = m + |(c)|) ->
+    (forall n, n < |(c)| -> d !! n = c !! n) ->
+    has_type d (bound_level_map (add m) |(c)| t) T ->
+    has_type c t T.
+  Proof.
+    intros. eapply has_type_bound_level_map_impl2; try eassumption; [lia|].
+    intros n Hn. repeat rewrite lookup_None1; auto. lia.
   Qed.
 
 
@@ -312,329 +633,174 @@ Module Stlc (Ty : TY).
   (** ** Substitution *)
   (********************)
 
-  Notation "|( l )|" := (length l) : stlc_scope.
-  Definition lvl_seq start len := tm_lvl <$> seq start len.
-
-  Fixpoint change_bound f m (t : tm) : tm :=
+  Fixpoint subst m (l : rlist tm) (t : tm) : tm :=
     match t with
-      | tm_lvl n => tm_lvl (if decide (m <= n) then f n else n)
-      | tm_app s t => tm_app (change_bound f m s) (change_bound f m t)
-      | tm_abs T t => tm_abs T (change_bound f m t)
-      | const => const
-    end.
-
-  Theorem change_bound_comp f g m t :
-    (forall x, m <= x -> m <= f x) ->
-    change_bound g m (change_bound f m t) =
-    change_bound (fun x => g (f x)) m t.
-  Proof.
-    intros F.
-    induction t; try reflexivity; simpl; try now f_equal.
-    destruct (decide (m <= n)).
-    - destruct (decide (m <= f n)); [reflexivity|].
-      exfalso. auto.
-    - destruct (decide (m <= n));
-      [contradiction|reflexivity].
-  Qed.
-
-  Theorem change_bound_id f m t :
-    (forall x, f x = x) -> change_bound f m t = t.
-  Proof.
-    intros.
-    induction t; try reflexivity; simpl; try now f_equal.
-    destruct (decide (m <= n)); auto.
-  Qed.
-
-  (** Increase the bound levels in a term by 1 *)
-  Definition incr_bound := change_bound S.
-
-  Fixpoint subst m (l : list tm) (t : tm) : tm :=
-    match t with
-    | tm_lvl n => nth n l n
+    | tm_lvl n => lookup_default (tm_lvl n) n l
     | tm_app s t => tm_app (subst m l s) (subst m l t)
     | tm_abs T t =>
-        tm_abs T (subst (m+1) ((incr_bound m <$> l) +: tm_lvl m) t)
+        tm_abs T (subst (S m) ((bound_level_map S m <$> l) +: tm_lvl m) t)
     | const => const
     end.
 
-  Definition subst_last m s := subst m (lvl_seq 0 m +: s).
-
-
-  Theorem has_type_incr_bound1 C D c t T :
-    has_type (C ++ D) t T ->
-    has_type (C +: c ++ D) (incr_bound (length C) t) T.
+  Theorem has_type_subst_h n Rn (r : rlist tm) (R C : context) (c : ty) :
+    |(r)| = |(R)| ->
+    (forall rn, r !! n = Some rn -> R !! n = Some Rn -> has_type C rn Rn) ->
+    (forall rn, ((bound_level_map S |( C )| <$> r) +: tm_lvl |( C )|) !! n = Some rn -> (R +: c) !! n = Some Rn -> has_type (C +: c) rn Rn).
   Proof.
-    generalize dependent T.
-    generalize dependent D.
-    induction t; intros D T HT;
-      inversion HT; subst; econstructor; simpl in *.
-    - destruct (decide (length C <= n)).
-      + rewrite @lookup_app_r in *; try assumption;
-          rewrite length_app; [|simpl; lia].
-        match goal with [H : _ |- _] => rewrite <- H end.
-        f_equal. simpl. lia.
-      + rewrite <- app_assoc.
-        rewrite @lookup_app_l in *; try assumption; lia.
-    - eauto.
-    - eauto.
-    - rewrite <- app_assoc.
-      match goal with [H : _ |- _] => apply H end.
-      now rewrite app_assoc.
+    intros L F **.
+    destruct (lt_total n |(r)|) as [Ln | [En | Gn]].
+    - rewrite lookup_rcons_lt in H; [|now rewrite rlength_fmap].
+      rewrite lookup_fmap in H.
+      apply fmap_Some in H as (x & Hx1 & Hx2).
+      subst rn. apply has_type_bound_level_map_S.
+      eapply F; [eassumption|].
+      rewrite lookup_rcons_lt in H0; [assumption|].
+      now rewrite <- L.
+    - rewrite lookup_rcons_eq in H; [|now rewrite rlength_fmap].
+      injection H. intros. subst. constructor.
+      rewrite <- H0.
+      repeat rewrite @lookup_rcons_eq; auto.
+    - rewrite lookup_rcons_gt in H; [discriminate|now rewrite rlength_fmap].
   Qed.
 
-  Theorem has_type_incr_bound2 C D c t T :
-    has_type (C +: c ++ D) (incr_bound (length C) t) T ->
-    has_type (C ++ D) t T.
+  Theorem has_type_subst1 C T R t r :
+    |(r)| = |(R)| ->
+    (forall n rn Rn, r !! n = Some rn -> R !! n = Some Rn -> has_type C rn Rn) ->
+    has_type R t T ->
+    has_type C (subst |(C)| r t) T.
   Proof.
-    generalize dependent T.
-    generalize dependent D.
-    induction t; intros D T HT;
-      inversion HT; subst; econstructor; simpl in *.
-    - destruct (decide (length C <= n)).
-      + rewrite @lookup_app_r in *; try assumption;
-        rewrite length_app in *; [|simpl; lia].
-        match goal with [H : _ |- _] => rewrite <- H end.
-        f_equal. simpl. lia.
-      + rewrite <- app_assoc in *.
-        rewrite @lookup_app_l in *; try assumption; lia.
-    - eauto.
-    - eauto.
-    - rewrite <- app_assoc.
-      match goal with [H : _ |- _] => apply H end.
-      now rewrite app_assoc.
-  Qed.
-
-  Theorem has_type_swap C c d t T :
-    has_type (C +: c +: d)
-      (incr_bound (length (C +: c)) t) T ->
-    has_type (C +: d +: c) (incr_bound (length C) t) T.
-  Proof.
-    intros HT.
-    apply has_type_incr_bound1.
-    rewrite <- (app_nil_r (C +: c)).
-    rewrite <- (app_nil_r ((C +: c) +: d)) in HT.
-    eapply has_type_incr_bound2.
-    eassumption.
-  Qed.
-
-  Theorem has_type_app C c t T : has_type C t T ->
-    has_type (C +: c) (incr_bound (length C) t) T.
-  Proof.
-    intros. rewrite <- (app_nil_r (C +: c)).
-    apply has_type_incr_bound1.
-    now rewrite app_nil_r.
-  Qed.
-
-  Theorem has_type_subst1 C T S t s :
-    Forall2 (fun si Si => has_type C si Si) s S ->
-    has_type S t T ->
-    has_type C (subst (length C) s t) T.
-  Proof.
-    generalize dependent s. generalize dependent S.
+    generalize dependent r. generalize dependent R.
     generalize dependent T. generalize dependent C.
     induction t as [| |c ? IH| | | | | | |];
-    simpl; intros C T S s F HT;
+    simpl; intros C T R r L F HT;
       inversion HT; subst; try constructor.
-    - generalize dependent s. generalize dependent n.
-      induction S as [|h t IH]; intros n HT Hn s F;
-        [now rewrite @lookup_nil in Hn|].
-      destruct s; [apply Forall2_length in F; discriminate|].
-      inversion F. subst.
-      destruct n as [|n]; simpl in *;
-        [injection Hn; intros; now subst|].
-      destruct (Nat.ltb_spec n (length s)).
-      + rewrite nth_indep with (d' := tm_lvl n); [|assumption].
-        apply IH; try assumption.
-        constructor. inversion HT. now subst.
-      + rewrite lookup_ge_None_2 in Hn; [discriminate|].
-        replace (length t) with (length s); [assumption|].
-        eapply Forall2_length. eassumption.
+    - unfold lookup_default.
+      destruct (r !! n) eqn : E; [now apply (F n) |].
+      apply lookup_None2 in E.
+      rewrite @lookup_None1 in H1; [discriminate|].
+      now rewrite <- L.
     - econstructor; eauto.
-    - replace (length C + 1) with (length (C +: c));
-        [|apply length_app].
-      eapply IH; [|eassumption].
-      apply Forall2_app.
-      + clear dependent B. generalize dependent s.
-        induction S; intros s F; destruct s;
-          try (apply Forall2_length in F; discriminate);
-          [constructor|].
-          inversion F. subst.
-          constructor; [now apply has_type_app|].
-          now apply IHS.
-      + constructor; constructor.
-        rewrite @lookup_app_r; [|auto].
-        now rewrite Nat.sub_diag.
+    - replace (S |(C)|) with (|(C +: c)|); [|apply rlength_rcons].
+      eapply IH; try eassumption.
+      + repeat rewrite rlength_rcons. rewrite rlength_fmap.
+        now f_equal.
+      + intros. eapply has_type_subst_h; eauto.
   Qed.
 
-  Theorem has_type_subst2 C T S t s :
-    Forall2 (fun si Si => has_type C si Si) s S ->
-    length C <= length S ->
-    has_type C (subst (length C) s t) T ->
-    has_type S t T.
+  Theorem has_type_subst2 C T R t r :
+    |(C)| <= |(R)| -> |(r)| = |(R)| ->
+    (forall n rn Rn, r !! n = Some rn -> R !! n = Some Rn -> has_type C rn Rn) ->
+    has_type C (subst |(C)| r t) T ->
+    has_type R t T.
   Proof.
-    generalize dependent s. generalize dependent S.
+    generalize dependent r. generalize dependent R.
     generalize dependent T. generalize dependent C.
-    induction t; simpl; intros C T S s F L HT;
+    induction t as [| | t | | | | | | |];
+    simpl; intros C T R r L E F HT;
       try solve [inversion HT; constructor].
-    - assert (exists A, has_type S n A). {
-        destruct (Nat.ltb_spec n (length S)).
-        - apply lookup_lt_is_Some_2 in H.
-          destruct H as [X H].
-          exists X. now constructor.
-        - apply Forall2_length in F.
-          rewrite nth_overflow in HT; [|now rewrite F].
+    - assert (exists A, has_type R n A). {
+        destruct (decide (n < |(R)|)) as [Hn | Hn].
+        - apply is_Some_lookup in Hn as [x Hx].
+          exists x. now constructor.
+        - unfold lookup_default in HT.
+          rewrite lookup_None1 in HT; [|lia].
           inversion HT. subst.
-          rewrite @lookup_ge_None_2 in H2;
-            [discriminate|lia].
+          rewrite @lookup_None1 in H1; [discriminate|lia].
       }
       destruct H as [X H]. replace T with X; [assumption|].
-      eapply has_type_subst1 in H; [|eassumption].
+      eapply has_type_subst1 in H; try eassumption.
       simpl in H. eapply has_type_unique; eassumption.
     - inversion HT. subst. econstructor; eauto.
     - inversion HT. subst. constructor.
       eapply (IHt (C +: t)).
-      3:{
-        replace (length C + 1) with (length (C +: t));
-          [|apply length_app].
-        rewrite length_app. simpl. apply H3.
+      4:{
+        replace (S |(C)|) with (|(C +: t)|) in H3; [|rewrite rlength_rcons; lia].
+        apply H3.
       }
-      + apply Forall2_app.
-        -- clear dependent B L. generalize dependent s.
-           induction S; intros s F; destruct s;
-           try (apply Forall2_length in F; discriminate);
-           [constructor|].
-           inversion F. subst.
-           constructor;
-             [now apply has_type_app|now apply IHS].
-        -- constructor; constructor.
-           rewrite @lookup_app_r; [|lia].
-           now rewrite Nat.sub_diag.
-      + repeat rewrite length_app. simpl. lia.
+      + repeat rewrite rlength_rcons. lia.
+      + repeat rewrite rlength_rcons. f_equal.
+        now rewrite rlength_fmap.
+      + intros. eapply has_type_subst_h; eauto.
   Qed.
 
-  Theorem has_type_seq C D E :
-    Forall2 (fun si Si => has_type (C ++ D ++ E) si Si)
-      (lvl_seq |(C)| |(D)|) D.
-  Proof.
-    generalize dependent E.
-    induction D using rev_ind; intros E; [constructor|].
-    unfold lvl_seq.
-    rewrite length_app, seq_app, fmap_app. simpl.
-    apply Forall2_app; [now rewrite <- app_assoc|].
-    repeat constructor.
-    replace (C ++ D +: x ++ E) with ((C ++ D) ++ x :: E);
-      [|now repeat rewrite <- app_assoc].
-    apply list_lookup_middle. symmetry. apply length_app.
-  Qed.
+
+  Definition subst_last m s := subst m (build_rlist m tm_lvl +: s).
 
   Theorem has_type_subst_last C T X s t :
     has_type (C +: T) t X -> has_type C s T ->
-    has_type C (subst_last (length C) s t) X.
+    has_type C (subst_last |(C)| s t) X.
   Proof.
     intros Ht Hs.
-    eapply has_type_subst1; [|eassumption].
-    apply Forall2_app; [|now repeat constructor].
-    generalize (has_type_seq [] C []).
-    now rewrite app_nil_r.
+    eapply has_type_subst1; try eassumption.
+    - repeat rewrite rlength_rcons. f_equal.
+      apply rlength_build_rlist.
+    - intros.
+      destruct (lt_total n |(C)|) as [Ln | [En | Gn]].
+      + rewrite @lookup_rcons_lt in H, H0; try assumption.
+        * rewrite lookup_build_rlist in H; [|assumption].
+          injection H. intros <-. now constructor.
+        * now rewrite rlength_build_rlist.
+      + rewrite @lookup_rcons_eq in H, H0; try assumption.
+        * injection H. injection H0. intros <- <-. assumption.
+        * now rewrite rlength_build_rlist.
+      + rewrite lookup_rcons_gt in H0; [discriminate|lia].
   Qed.
-
-  (*
-  Theorem has_type_subst_ind1 C D E T A t a :
-    has_type (C ++ E ++ D) a A ->
-    has_type ((C ++ D) +: A) t T ->
-    has_type (C ++ E ++ D)
-      (subst_ind |(C ++ E ++ D)| |(C)| |(D)| a t) T.
-  Proof.
-    intros Ha Ht.
-    eapply has_type_subst1; [|eassumption].
-    apply Forall2_app; [|repeat constructor; assumption].
-    apply Forall2_app; [apply (has_type_seq []) |].
-    generalize (has_type_seq (C ++ E) D []).
-    rewrite app_nil_r, length_app. auto.
-  Qed.
-  *)
-
-  (*
-  Theorem has_type_subst_ind2 C D E T A t a :
-    has_type (C ++ E ++ D) a A ->
-    has_type (C ++ E ++ D)
-      (subst_ind |(C ++ E ++ D)| |(C)| |(D)| a t) T ->
-    has_type ((C ++ D) +: A) t T.
-  Proof.
-    intros Ha Ht.
-    eapply has_type_subst2; [| |eassumption];
-      [repeat rewrite length_app; simpl; lia|].
-    apply Forall2_app; [|repeat constructor; assumption].
-    apply Forall2_app.
-    - rewrite <- app_assoc. apply (has_type_seq []).
-    - generalize (has_type_seq (C +: c) D []).
-      rewrite app_nil_r, length_app. auto.
-  Qed.
-  *)
 
 
   (*****************)
   (** ** Reduction *)
   (*****************)
 
-  Fixpoint contains_lvl n t :=
+  Fixpoint level_prop P t : bool :=
     match t with
-    | tm_lvl m => Nat.eqb m n
-    | tm_abs T s => contains_lvl n s
-    | tm_app s1 s2 => orb (contains_lvl n s1) (contains_lvl n s2)
+    | tm_lvl m => P m
+    | tm_abs T s => level_prop P s
+    | tm_app s1 s2 => orb (level_prop P s1) (level_prop P s2)
     | _ => false
     end.
 
-  Theorem contains_lvl_has_type C D c d t T :
-    contains_lvl (length C) t = false ->
-    has_type (C ++ c :: D) t T ->
-    has_type (C ++ d :: D) t T.
+  Definition contains_bound_levels m n :=
+    level_prop (fun x => andb (leb m x) (ltb x (n + m))).
+
+  Theorem bound_level_map_id m n t :
+    contains_bound_levels m n t = false ->
+    bound_level_map (add n) m (bound_level_map (fun x => x - n) m t) = t.
   Proof.
-    generalize dependent T.
-    generalize dependent D.
-    induction t; intros D T HC HT;
-      inversion HT; subst; econstructor; simpl in *.
-    - destruct (Nat.ltb_spec n (length C)).
-      + rewrite @lookup_app_l in *; assumption.
-      + apply Nat.eqb_neq in HC.
-        assert (E : forall x, C ++ x :: D = (C +: x) ++ D);
-          [intros; now rewrite <- app_assoc|].
-        rewrite E in *.
-        rewrite @lookup_app_r in *; rewrite length_app in *;
-          simpl in *; try assumption; lia.
-    - eapply IHt1; [|eassumption].
-      destruct (contains_lvl (length C) t1); [|reflexivity].
-      rewrite orb_true_l in HC. discriminate.
-    - eapply IHt2; [|eassumption].
-      destruct (contains_lvl (length C) t2); [|reflexivity].
-      rewrite orb_true_r in HC. discriminate.
-    - rewrite <- app_assoc in *. eapply IHt; eassumption.
+    unfold bound_level_map, contains_bound_levels. intros L.
+    induction t; try reflexivity; simpl in *.
+    - f_equal.
+      destruct (decide (m <= n0)), (leb_spec m n0), (ltb_spec n0 (n + m));
+        try discriminate; try lia.
+      + destruct (decide (m <= n0 - n)); lia.
+      + destruct (decide (m <= n0)); lia.
+    - apply orb_false_elim in L. intuition congruence.
+    - intuition congruence.
   Qed.
 
   Fixpoint beta_reduction m (t : tm) : tm :=
     match t with
     | tm_app (tm_abs T t) s =>
-        subst_last m (beta_reduction m s) (beta_reduction (m + 1) t)
+        subst_last m (beta_reduction m s) (beta_reduction (S m) t)
     | tm_app s t => tm_app (beta_reduction m s) (beta_reduction m t)
-    | tm_abs T t => tm_abs T (beta_reduction (m + 1) t)
+    | tm_abs T t => tm_abs T (beta_reduction (S m) t)
     | x => x
     end.
 
   Fixpoint eta_reduction m (t : tm) {struct t} : tm :=
     match t with
     | tm_abs T (tm_app t (tm_lvl n)) =>
-        if andb (Nat.eqb n m) (negb (contains_lvl m t)) then
-          change_bound (fun x => x - 1) m t
-          else tm_abs T (tm_app (eta_reduction (m + 1) t) n)
+        if andb (eqb n m) (negb (contains_bound_levels m 1 t)) then
+          bound_level_map (fun x => x - 1) m t
+          else tm_abs T (tm_app (eta_reduction (S m) t) n)
     | tm_app s t => tm_app (eta_reduction m s) (eta_reduction m t)
-    | tm_abs T t => tm_abs T (eta_reduction (m + 1) t)
+    | tm_abs T t => tm_abs T (eta_reduction (S m) t)
     | x => x
     end.
 
 
   Theorem has_type_beta_reduction C T t :
     has_type C t T ->
-    has_type C (beta_reduction (length C) t) T.
+    has_type C (beta_reduction |(C)| t) T.
   Proof.
     generalize dependent T. generalize dependent C.
     induction t; intros C T HT; try assumption.
@@ -646,58 +812,33 @@ Module Stlc (Ty : TY).
       apply ty_arr_inj in H5. destruct H5. now subst.
     - inversion HT. subst.
       simpl. constructor.
-      specialize IHt with (C +: t) B.
-      rewrite length_app in IHt. simpl in IHt. auto.
+      specialize IHt with (C +: t0) B.
+      rewrite rlength_rcons in IHt.
+      auto.
   Qed.
 
   Theorem has_type_eta_reduction C T t :
     has_type C t T ->
-    has_type C (eta_reduction (length C) t) T.
+    has_type C (eta_reduction |(C)| t) T.
   Proof.
     generalize dependent T. generalize dependent C.
-    induction t; intros C T HT; try assumption.
-    - inversion HT. subst. econstructor; eauto.
-    - destruct t0; try solve
-        [inversion HT; subst; econstructor; eauto].
-      2:{
-          inversion HT. subst.
-          assert (IH := IHt (C +: t)).
-          rewrite length_app in IH.
-          simpl. constructor. now apply IH.
-        }
-      + inversion HT. subst.
-        assert (IH := IHt (C +: t)).
-        rewrite length_app in IH. simpl in IH.
-        destruct t0_2; try solve [constructor; auto]. simpl.
-        destruct (Nat.eqb_spec n |(C)|);
-        destruct (contains_lvl |(C)| t0_1) eqn : E;
-          try solve [constructor; auto].
-        simpl in *. inversion H3. subst.
-        inversion H5. subst.
-        rewrite @lookup_app_r in H1; [|lia].
-        rewrite Nat.sub_diag in H1. simpl in H1.
-        injection H1. intros. subst.
-        rewrite <- (app_nil_r C) at 1.
-        eapply has_type_incr_bound2.
-        unfold incr_bound.
-        replace (change_bound _ _ _) with t0_1;
-          [rewrite app_nil_r; eassumption|].
-        clear dependent B A IHt.
-        induction t0_1; simpl in *; try reflexivity.
-        * destruct (Nat.eqb_spec n |(C)|); [discriminate|].
-          destruct (decide (|(C)| <= n)).
-          -- destruct (decide (|(C)| <= n - 1)); [|lia].
-             f_equal. lia.
-          -- destruct (decide (|(C)| <= n)); [|reflexivity].
-             lia.
-        * rewrite <- IHt0_1_2, <- IHt0_1_1; try reflexivity.
-          -- destruct (contains_lvl _ t0_1_1);
-               [|reflexivity].
-             now rewrite orb_true_l in E.
-          -- destruct (contains_lvl _ t0_1_2);
-               [|reflexivity].
-             now rewrite orb_true_r in E.
-        * now rewrite <- IHt0_1.
+    induction t; intros C T HT; try assumption;
+    inversion HT; subst; try solve [econstructor; eauto].
+    assert (IH := IHt (C +: t0)). rewrite rlength_rcons in IH.
+    destruct t1; try solve [econstructor; eauto].
+    simpl in IH.
+    destruct t1_2; try solve [constructor; auto]. simpl.
+    destruct (eqb_spec n |(C)|);
+    destruct (contains_bound_levels |(C)| 1 t1_1) eqn : E;
+      try solve [constructor; auto].
+    simpl in *. inversion H3. subst.
+    inversion H5. subst.
+    rewrite @lookup_rcons_eq in H1; [|lia].
+    injection H1. intros ->.
+    eapply has_type_bound_level_map2.
+    3:{ rewrite bound_level_map_id; eassumption. }
+    - now rewrite rlength_rcons.
+    - intros. now rewrite lookup_rcons_lt.
   Qed.
 End Stlc.
 
@@ -707,7 +848,7 @@ End Stlc.
 (****************)
 
 Module StlcChurch.
-  Module Stlc := Stlc TyChurch.
+  Module Stlc := Stlc TyChurch RlistList.
   Import Stlc.
   Import TyChurchTheories.
 
@@ -729,6 +870,7 @@ Module StlcChurch.
   Compute subst 2 [tm_lvl 0; <{ \: i, 1 2 }>] <{ \: o, 1 }>.
   Compute subst 0 [tm_lvl 0; tm_lvl 1; <{ \: i, 0 0 }>] <{ \: o, \: i, 2 2 }>.
   Compute subst 0 [ tm_top ] <{ \: o, 1 }>.
+  Compute subst_last 1 tm_bot <{ \: o, 1 }>.
 
   (** Reduction *)
   Compute beta_reduction 1 <{ (\: o, 1) 0 }>.
