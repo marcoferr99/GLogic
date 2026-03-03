@@ -5,19 +5,19 @@ Require Import stlc.
 (** * G Logic Deductions *)
 (*************************)
 
-Module GLogic (Ty : TY).
-  Module Stlc := Stlc Ty.
+Module GLogic (Ty : TY) (Rlist : RLIST).
+  Module Stlc := Stlc Ty Rlist.
   Import Stlc.
 
-  Record judgement : Set := jd_build {
-    jd_cnt : context;
-    jd_tm  : tm
+  Record judgement : Type := jm_build {
+    jm_cnt : context;
+    jm_tm  : tm
   }.
 
   Definition wf_judgement C j :=
-    match j with | jd_build c t => has_type (C ++ c) t ty_prp end.
+    match j with | jm_build c t => has_type c t ty_prp /\ (forall n, n < |(C)| -> c !! n = C !! n) end.
 
-  Record sequent : Set := sq_build {
+  Record sequent : Type := sq_build {
     sq_context : context;
     sq_premises : list judgement;
     sq_conclusion : judgement
@@ -30,13 +30,13 @@ Module GLogic (Ty : TY).
 
   (*Notation "|( sig ; l --> B )|" := (sq_build sig l B)
     (sig custom stlc_ty, l custom stlc_ty, B custom stlc_ty).*)
-  Notation "c :> t" := (jd_build c t)
+  Notation "c :> t" := (jm_build c t)
     (at level 70, t custom stlc_tm at level 60) : stlc_scope.
 
   Inductive is_derivable : sequent -> Prop :=
-    | rl_init C c t :
-        has_type (C ++ c) t ty_prp ->
-        is_derivable (sq_build C [c :> t] (c :> t))
+    | rl_init C j :
+        wf_judgement C j ->
+        is_derivable (sq_build C [j] j)
     | rl_cut C l m b c :
         is_derivable (sq_build C l b) ->
         is_derivable (sq_build C (b :: m) c) ->
@@ -44,21 +44,22 @@ Module GLogic (Ty : TY).
     | rl_cL C l b c :
         is_derivable (sq_build C (b :: b :: l) c) ->
         is_derivable (sq_build C (b :: l) c)
-    | rl_wL C c l b t :
-        has_type (C ++ c) t ty_prp ->
+    | rl_wL C l b j :
+        wf_judgement C j ->
         is_derivable (sq_build C l b) ->
-        is_derivable (sq_build C ((c :> t) :: l) b)
-    | rl_botL C c d t :
-        has_type (C ++ c) t ty_prp ->
-        is_derivable (sq_build C [d :> tm_bot] (c :> t))
+        is_derivable (sq_build C (j :: l) b)
+    | rl_botL C d j :
+        wf_judgement C j ->
+        is_derivable (sq_build C [d :> tm_bot] j)
     | rl_topR C c :
+        (forall n, n < |(C)| -> c !! n = C !! n) ->
         is_derivable (sq_build C [] (c :> tm_top))
     | rl_andL1 C c l b t s :
-        has_type (C ++ c) t ty_prp ->
+        wf_judgement C (c :> t) ->
         is_derivable (sq_build C ((c :> s) :: l) b) ->
         is_derivable (sq_build C ((c :> tm_and s t) :: l) b)
     | rl_andL2 C c l b t s :
-        has_type (C ++ c) s ty_prp ->
+        wf_judgement C (c :> s) ->
         is_derivable (sq_build C ((c :> t) :: l) b) ->
         is_derivable (sq_build C ((c :> tm_and s t) :: l) b)
     | rl_andR C c l t s :
@@ -70,11 +71,11 @@ Module GLogic (Ty : TY).
         is_derivable (sq_build C (c :> t :: l) b) ->
         is_derivable (sq_build C ((c :> tm_or s t) :: l) b)
     | rl_orR1 C c l t s :
-        has_type (C ++ c) t ty_prp ->
+        wf_judgement C (c :> t) ->
         is_derivable (sq_build C l (c :> s)) ->
         is_derivable (sq_build C l (c :> tm_or s t))
     | rl_orR2 C c l t s :
-        has_type (C ++ c) s ty_prp ->
+        wf_judgement C (c :> s) ->
         is_derivable (sq_build C l (c :> t)) ->
         is_derivable (sq_build C l (c :> tm_or s t))
     | rl_impL C c l B t s :
