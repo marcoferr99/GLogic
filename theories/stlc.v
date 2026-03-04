@@ -622,4 +622,11 @@ Module StlcTheories (Stlc : STLC).
            now rewrite eta_reduction_app, eta_reduction_lvl in HB1.
     - unfold eta_reduction. now tm_simpl.
   Qed.
+
+  Inductive lambda_equiv m : tm -> tm -> Prop :=
+    | le_id t : lambda_equiv m t t
+    | le_beta s t :
+        lambda_equiv m (beta_reduction m s) t -> lambda_equiv m s t
+    | le_eta s t :
+        lambda_equiv m (eta_reduction m s) t -> lambda_equiv m s t.
 End StlcTheories.

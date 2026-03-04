@@ -17,7 +17,9 @@ Module GStlc <: STLC.
     | gtm_or  : gtm
     | gtm_imp : gtm
     | gtm_for : ty -> gtm
-    | gtm_ex  : ty -> gtm.
+    | gtm_ex  : ty -> gtm
+    | gtm_nab : ty -> gtm
+    | gtm_nom : ty -> nat -> gtm.
 
   Definition tm := gtm.
   Definition tm_lvl := gtm_lvl.
@@ -36,7 +38,7 @@ Module GStlc <: STLC.
   Proof. intros n N. inversion N. Qed.
 
   Definition tm_rect (P : gtm -> Type) l a b (o : forall t (O : tm_other t), P t) : forall t, P t :=
-    gtm_rect P l a b (o gtm_bot I) (o gtm_top I) (o gtm_and I) (o gtm_or I) (o gtm_imp I) (fun t => o (gtm_for t) I) (fun t => o (gtm_ex t) I).
+    gtm_rect P l a b (o gtm_bot I) (o gtm_top I) (o gtm_and I) (o gtm_or I) (o gtm_imp I) (fun t => o (gtm_for t) I) (fun t => o (gtm_ex t) I) (fun t => o (gtm_nab t) I) (fun t n => o (gtm_nom t n) I).
 
   Theorem tm_rect_lvl : forall P l a b o n, tm_rect P l a b o (tm_lvl n) = l n.
   Proof. reflexivity. Qed.
@@ -68,7 +70,9 @@ Module GStlc <: STLC.
     | t_or  c : ghas_type c gtm_or  -[ o -> o -> o ]-
     | t_imp c : ghas_type c gtm_imp -[ o -> o -> o ]-
     | t_for c T : ghas_type c (gtm_for T) -[ (T -> o) -> o ]-
-    | t_ex  c T : ghas_type c (gtm_ex  T) -[ (T -> o) -> o ]-.
+    | t_ex  c T : ghas_type c (gtm_ex  T) -[ (T -> o) -> o ]-
+    | t_nab c T : ghas_type c (gtm_nab T) -[ (T -> o) -> o ]-
+    | t_nom c T n : ghas_type c (gtm_nom T n) T.
 
   Definition has_type := ghas_type.
 
@@ -109,9 +113,48 @@ Module GStlc <: STLC.
     tm_other t -> has_type c t A -> has_type c t B -> A = B.
   Proof.
     intros c t A B Ot HA HB.
-    destruct t; (try now (inversion HA; inversion HB)).
+    destruct t; inversion HA; inversion HB; now subst.
   Qed.
 End GStlc.
+
+Module GStlcTheories.
+  Module StlcTheories := StlcTheories GStlc.
+  Export StlcTheories.
+
+  (** Notations *)
+  Notation "<{ x }>" := x (x custom stlc_tm at level 200) : stlc_scope.
+  Notation "x" := x
+    (in custom stlc_tm at level 0, x constr at level 0) : stlc_scope.
+  Notation "( t )" := t
+    (in custom stlc_tm at level 0, t custom stlc_tm) : stlc_scope.
+  Notation "$( x )" := x
+    (in custom stlc_tm at level 0, x constr, only parsing) : stlc_scope.
+  Notation "'for' T , t" := (tm_app (gtm_for T) (tm_abs T t))
+    (in custom stlc_tm at level 200, T custom stlc_ty,
+      t custom stlc_tm at level 200, left associativity) : stlc_scope.
+  Notation "'ex' T , t" := (tm_app (gtm_ex T) (tm_abs T t))
+    (in custom stlc_tm at level 200, T custom stlc_ty,
+      t custom stlc_tm at level 200, left associativity) : stlc_scope.
+  Notation "'nab' T , t" := (tm_app (gtm_nab T) (tm_abs T t))
+    (in custom stlc_tm at level 200, T custom stlc_ty,
+      t custom stlc_tm at level 200, left associativity) : stlc_scope.
+
+
+  Record permut : Set := {
+    permutf : nat -> nat;
+    permutb : nat -> nat;
+    _ : forall n, permutf (permutb n) = n;
+    _ : forall n, permutb (permutf n) = n;
+  }.
+
+  (*
+  Definition equiv m t s : Prop :=
+    exists p : permut, lambda_equiv m t (permutf p s).
+    *)
+  Parameter tm_equiv : nat -> tm -> tm -> Prop.
+  Parameter supp : tm -> list tm.
+  Parameter type_check : context -> tm -> ty.
+End GStlcTheories.
 
 
 (*
