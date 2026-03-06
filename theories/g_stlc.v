@@ -34,9 +34,6 @@ Module GStlc <: STLC.
     | _ => True
     end.
 
-  Theorem tm_other_lvl : forall n, ~ tm_other (tm_lvl n).
-  Proof. intros n N. inversion N. Qed.
-
   Definition tm_rect (P : gtm -> Type) l a b (o : forall t (O : tm_other t), P t) : forall t, P t :=
     gtm_rect P l a b (o gtm_bot I) (o gtm_top I) (o gtm_and I) (o gtm_or I) (o gtm_imp I) (fun t => o (gtm_for t) I) (fun t => o (gtm_ex t) I) (fun t => o (gtm_nab t) I) (fun t n => o (gtm_nom t n) I).
 
@@ -58,63 +55,19 @@ Module GStlc <: STLC.
     destruct t; simpl; destruct O; reflexivity.
   Qed.
 
-  Inductive ghas_type : context -> gtm -> ty -> Prop :=
-    | t_lvl c n T : c !! n = Some T -> ghas_type c (gtm_lvl n) T
-    | t_app c A B s t : ghas_type c s (ty_arr A B) -> ghas_type c t A ->
-        ghas_type c (gtm_app s t) B
-    | t_abs c A B t : ghas_type (c +: A) t B ->
-        ghas_type c (gtm_abs A t) (ty_arr A B)
-    | t_bot c : ghas_type c gtm_bot ty_prp
-    | t_top c : ghas_type c gtm_top ty_prp
-    | t_and c : ghas_type c gtm_and -[ o -> o -> o ]-
-    | t_or  c : ghas_type c gtm_or  -[ o -> o -> o ]-
-    | t_imp c : ghas_type c gtm_imp -[ o -> o -> o ]-
-    | t_for c T : ghas_type c (gtm_for T) -[ (T -> o) -> o ]-
-    | t_ex  c T : ghas_type c (gtm_ex  T) -[ (T -> o) -> o ]-
-    | t_nab c T : ghas_type c (gtm_nab T) -[ (T -> o) -> o ]-
-    | t_nom c T n : ghas_type c (gtm_nom T n) T.
-
-  Definition has_type := ghas_type.
-
-  Theorem has_type_lvl : forall c n T,
-    has_type c (tm_lvl n) T <-> c !! n = Some T.
-  Proof.
-    split; intros.
-    - now inversion H.
-    - now constructor.
-  Qed.
-
-  Theorem has_type_app : forall c s t B,
-    has_type c (tm_app s t) B <->
-    exists A, has_type c s (ty_arr A B) /\  has_type c t A.
-  Proof.
-    split; intros.
-    - inversion H. eauto.
-    - destruct H as [? [? ?]]. econstructor; eassumption.
-  Qed.
-
-  Theorem has_type_abs : forall c A T t,
-    has_type c (tm_abs A t) T <->
-    exists B, has_type (c +: A) t B /\ T = -[ A -> B ]-.
-  Proof.
-    split; intros.
-    - inversion H. subst. exists B. now split.
-    - destruct H as [? [? ?]]. subst. now constructor.
-  Qed.
-
-  Theorem has_type_other_indep : forall c d t T,
-    tm_other t -> has_type c t T -> has_type d t T.
-  Proof.
-    intros c d t T O Ht.
-    destruct t; try (inversion Ht; constructor); exfalso; destruct O.
-  Qed.
-
-  Theorem has_type_other_unique : forall c t A B,
-    tm_other t -> has_type c t A -> has_type c t B -> A = B.
-  Proof.
-    intros c t A B Ot HA HB.
-    destruct t; inversion HA; inversion HB; now subst.
-  Qed.
+  Definition has_type_other t :=
+    match t with
+    | gtm_bot => ty_prp
+    | gtm_top => ty_prp
+    | gtm_for T => -[ (T -> o) -> o ]-
+    | gtm_ex  T => -[ (T -> o) -> o ]-
+    | gtm_nab T => -[ (T -> o) -> o ]-
+    | gtm_and => -[ o -> o -> o ]-
+    | gtm_or  => -[ o -> o -> o ]-
+    | gtm_imp => -[ o -> o -> o ]-
+    | gtm_nom T n => T
+    | _ => ty_prp
+    end.
 End GStlc.
 
 Module GStlcTheories.
@@ -129,6 +82,12 @@ Module GStlcTheories.
     (in custom stlc_tm at level 0, t custom stlc_tm) : stlc_scope.
   Notation "$( x )" := x
     (in custom stlc_tm at level 0, x constr, only parsing) : stlc_scope.
+  Notation "x \/ y" := (tm_app (tm_app gtm_or x) y)
+    (in custom stlc_tm at level 60, left associativity) : stlc_scope.
+  Notation "x /\ y" := (tm_app (tm_app gtm_and x) y)
+    (in custom stlc_tm at level 50, left associativity) : stlc_scope.
+  Notation "x > y" := (tm_app (tm_app gtm_imp x) y)
+    (in custom stlc_tm at level 70, left associativity) : stlc_scope.
   Notation "'for' T , t" := (tm_app (gtm_for T) (tm_abs T t))
     (in custom stlc_tm at level 200, T custom stlc_ty,
       t custom stlc_tm at level 200, left associativity) : stlc_scope.
@@ -140,20 +99,35 @@ Module GStlcTheories.
       t custom stlc_tm at level 200, left associativity) : stlc_scope.
 
 
+  (*
   Record permut : Set := {
     permutf : nat -> nat;
     permutb : nat -> nat;
     _ : forall n, permutf (permutb n) = n;
     _ : forall n, permutb (permutf n) = n;
   }.
+  *)
 
-  (*
-  Definition equiv m t s : Prop :=
-    exists p : permut, lambda_equiv m t (permutf p s).
-    *)
-  Parameter tm_equiv : nat -> tm -> tm -> Prop.
+  Fixpoint tm_permut (f : ty -> nat -> nat) t : tm :=
+    match t with
+    | gtm_nom T a => f T a
+    | gtm_abs T t => tm_abs T (tm_permut f t)
+    | gtm_app s t => tm_app (tm_permut f s) (tm_permut f t)
+    | x => x
+    end.
+
+  Inductive invertible {A B} (f : A -> B) : Prop :=
+    invertible_intro g :
+      (forall x, f (g x) = x) ->
+      (forall x, g (f x) = x) ->
+      invertible f.
+
+  Inductive tm_equiv m : tm -> tm -> Prop :=
+    tm_equiv_intro a b f :
+      (forall T, invertible (f T)) -> lambda_equiv m a (tm_permut f b) ->
+      tm_equiv m a b.
+
   Parameter supp : tm -> list tm.
-  Parameter type_check : context -> tm -> ty.
 End GStlcTheories.
 
 

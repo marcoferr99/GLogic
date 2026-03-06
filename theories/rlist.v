@@ -13,25 +13,20 @@ Module Type RLIST.
   Parameter rlength : forall {A}, rlist A -> nat.
 
   Declare Instance rlist_lookup {A} : Lookup nat A (rlist A).
+
   Axiom is_Some_lookup : forall {A} (c : rlist A) n,
     is_Some (c !! n) <-> n < rlength c.
 
-  Parameter rcons : forall {A}, rlist A -> A -> rlist A.
-  Axiom rlength_rcons :
-    forall {A} (c : rlist A) t, rlength (rcons c t) = S (rlength c).
-  Axiom lookup_rcons_eq : forall {A} (c : rlist A) t n,
-    n = rlength c -> rcons c t !! n = Some t.
-  Axiom lookup_rcons_lt : forall {A} (c : rlist A) t n,
-    n < rlength c -> rcons c t !! n = c !! n.
-
   (** Build a list from its length and its (total) lookup function *)
   Parameter build_rlist : forall {A}, nat -> (nat -> A) -> rlist A.
+
   Axiom rlength_build_rlist : forall {A} n (f : nat -> A),
     rlength (build_rlist n f) = n.
   Axiom lookup_build_rlist : forall {A} l (f : nat -> A) n,
     n < l -> build_rlist l f !! n = Some (f n).
 
   Declare Instance rlist_fmap : FMap rlist.
+
   Axiom lookup_fmap : forall {A} {B} (f : A -> B) (l : rlist A) n,
     (f <$> l) !! n = f <$> l !! n.
 End RLIST.
@@ -42,7 +37,6 @@ End RLIST.
 Module RlistTheories (Rlist : RLIST).
   Export Rlist.
 
-  Notation "l +: e" := (rcons l e) (at level 50) : stlc_scope.
   Notation "|( c )|" := (rlength c) : stlc_scope.
 
 
@@ -68,6 +62,36 @@ Module RlistTheories (Rlist : RLIST).
     intros H.
     destruct (decide (n < |(c)|)); [|lia].
     apply is_Some_lookup in l. destruct l. now rewrite H in H0.
+  Qed.
+
+
+  Definition rcons {A} (l : rlist A) a :=
+    build_rlist (S |(l)|) (fun n => if decide (n < |(l)|) then lookup_default a n l else a).
+
+  Notation "l +: e" := (rcons l e) (at level 50) : stlc_scope.
+
+  Theorem rlength_rcons : forall {A} (c : rlist A) t,
+    rlength (rcons c t) = S (rlength c).
+  Proof.
+    intros. unfold rcons. apply rlength_build_rlist.
+  Qed.
+
+  Theorem lookup_rcons_eq : forall {A} (c : rlist A) t n,
+    n = rlength c -> rcons c t !! n = Some t.
+  Proof.
+    intros.
+    unfold rcons. rewrite lookup_build_rlist; [|lia].
+    f_equal. rewrite decide_False; [easy|lia].
+  Qed.
+
+  Theorem lookup_rcons_lt : forall {A} (c : rlist A) t n,
+    n < rlength c -> (c +: t) !! n = c !! n.
+  Proof.
+    intros * H.
+    unfold rcons. rewrite lookup_build_rlist; [|lia].
+    apply is_Some_lookup in H as Hx. destruct Hx as [x Hx]. rewrite Hx.
+    f_equal. rewrite decide_True; [|easy].
+    unfold lookup_default. now rewrite Hx.
   Qed.
 
   Theorem lookup_rcons_gt : forall {A} (c : rlist A) t n,
@@ -121,56 +145,31 @@ End RlistTheories.
 Module RlistList <: RLIST.
   Definition rlist := list.
   Definition rlength := @length.
-  Definition rcons {A} l (e : A) := l ++ [e].
-
-  Theorem rlength_rcons {A} :
-    forall (c : rlist A) t, length (rcons c t) = S (length c).
-  Proof.
-    intros. unfold rcons.
-    rewrite length_app. simpl. lia.
-  Qed.
 
   Instance rlist_lookup {A} : Lookup nat A (rlist A) := list_lookup.
-
-  Theorem lookup_rcons_lt : forall {A} (c : rlist A) t n,
-    n < length c -> rcons c t !! n = c !! n.
-  Proof.
-    intros. unfold rcons.
-    now rewrite @lookup_app_l.
-  Qed.
 
   Theorem is_Some_lookup {A} :
     forall (c : rlist A) n, is_Some (c !! n) <-> n < length c.
   Proof. apply lookup_lt_is_Some. Qed.
 
-  Theorem lookup_rcons_eq : forall {A} (c : rlist A) t n,
-    n = length c -> rcons c t !! n = Some t.
-  Proof.
-    intros. unfold rcons.
-    rewrite @lookup_app_r; [|lia].
-    subst. now rewrite sub_diag.
-  Qed.
-
   Fixpoint build_rlist {A} n f : rlist A :=
     match n with
     | 0 => []
-    | S n => rcons (build_rlist n f) (f n)
+    | S n => build_rlist n f ++ [f n]
     end.
 
   Theorem rlength_build_rlist : forall {A} n (f : nat -> A),
     length (build_rlist n f) = n.
   Proof.
     intros. induction n; [reflexivity|].
-    simpl. unfold rcons.
-    rewrite length_app. rewrite IHn. simpl. lia.
+    simpl. rewrite length_app. rewrite IHn. simpl. lia.
   Qed.
 
   Theorem lookup_build_rlist : forall {A} n (f : nat -> A) x,
     x < n -> build_rlist n f !! x = Some (f x).
   Proof.
     intros. induction n; [lia|].
-    simpl. unfold rcons.
-    destruct (decide (x = n)).
+    simpl. destruct (decide (x = n)).
     - subst. rewrite @lookup_app_r; rewrite rlength_build_rlist; [|lia].
       now rewrite sub_diag.
     - rewrite @lookup_app_l.

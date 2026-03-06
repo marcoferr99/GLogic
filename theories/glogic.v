@@ -6,18 +6,31 @@ Require Import g_stlc.
 (** * G Logic Deductions *)
 (*************************)
 
-Module GLogic.
-  Import GStlcTheories.
+Module Type SQ_SET.
+  Import GStlc.
+
+  Parameter sq_set : Set.
+  Declare Instance sq_set_elem_of : ElemOf tm sq_set.
+  Declare Instance sq_set_empty : Empty sq_set.
+  Declare Instance sq_set_singleton : Singleton tm sq_set.
+  Declare Instance sq_set_union : Union sq_set.
+End SQ_SET.
+
+Notation "x :: X" := (X ∪ {[x]}) : stlc_scope.
+
+Module GLogic (SqSet : SQ_SET).
+  Export SqSet.
+  Export GStlcTheories.
 
   Record sequent : Type := sq_build {
     sq_context : context;
-    sq_premises : list tm;
+    sq_premises : sq_set;
     sq_conclusion : tm
   }.
 
   Definition wf_sequent s :=
     match s with
-    | sq_build C l j => has_type C j ty_prp /\ Forall (fun x => has_type C x ty_prp) l
+    | sq_build C p j => has_type C j ty_prp /\ forall t, t ∈ p -> has_type C t ty_prp
     end.
 
   (*Notation "|( sig ; l --> B )|" := (sq_build sig l B)
@@ -26,11 +39,11 @@ Module GLogic.
   Inductive is_derivable : sequent -> Prop :=
     | rl_id C a b :
         tm_equiv |(C)| a b ->
-        is_derivable (sq_build C [a] b)
+        is_derivable (sq_build C {[a]} b)
     | rl_cut C l m b c :
         is_derivable (sq_build C l b) ->
         is_derivable (sq_build C (b :: m) c) ->
-        is_derivable (sq_build C (l ++ m) c)
+        is_derivable (sq_build C (l ∪ m) c)
     | rl_cL C l b c :
         is_derivable (sq_build C (b :: b :: l) c) ->
         is_derivable (sq_build C (b :: l) c)
@@ -40,55 +53,54 @@ Module GLogic.
         is_derivable (sq_build C (a :: l) b)
     | rl_botL C c :
         has_type C c ty_prp ->
-        is_derivable (sq_build C [gtm_bot] c)
+        is_derivable (sq_build C {[gtm_bot]} c)
     | rl_topR C :
-        is_derivable (sq_build C [] gtm_top)
+        is_derivable (sq_build C ∅ gtm_top)
     | rl_orL C l b c d :
         is_derivable (sq_build C (b :: l) c) ->
         is_derivable (sq_build C (d :: l) c) ->
-        is_derivable (sq_build C (tm_app (tm_app gtm_or b) d :: l) c)
+        is_derivable (sq_build C (<{ b \/ d }> :: l) c)
     | rl_orR1 C l b c :
         has_type C c ty_prp ->
         is_derivable (sq_build C l b) ->
-        is_derivable (sq_build C l (tm_app (tm_app gtm_or b) c))
+        is_derivable (sq_build C l <{ b \/ c }>)
     | rl_orR2 C l b c :
         has_type C b ty_prp ->
         is_derivable (sq_build C l c) ->
-        is_derivable (sq_build C l (tm_app (tm_app gtm_or b) c))
+        is_derivable (sq_build C l <{ b \/ c }>)
     | rl_andL1 C l b c d :
         has_type C d ty_prp ->
         is_derivable (sq_build C (b :: l) c) ->
-        is_derivable (sq_build C (tm_app (tm_app gtm_and b) d :: l) c)
+        is_derivable (sq_build C (<{ b /\ d }> :: l) c)
     | rl_andL2 C l b c d :
         has_type C b ty_prp ->
         is_derivable (sq_build C (d :: l) c) ->
-        is_derivable (sq_build C (tm_app (tm_app gtm_and b) d :: l) c)
+        is_derivable (sq_build C (<{ b /\ d }> :: l) c)
     | rl_andR C l b c :
         is_derivable (sq_build C l b) ->
         is_derivable (sq_build C l c) ->
-        is_derivable (sq_build C l (tm_app (tm_app gtm_and b) c))
+        is_derivable (sq_build C l <{ b /\ c }>)
     | rl_impL C l b c d :
         is_derivable (sq_build C l b) ->
         is_derivable (sq_build C (d :: l) c) ->
-        is_derivable (sq_build C (tm_app (tm_app gtm_imp b) d :: l) c)
+        is_derivable (sq_build C (<{ b > d }> :: l) c)
     | rl_impR C l b c :
         is_derivable (sq_build C (b :: l) c) ->
-        is_derivable (sq_build C l (tm_app (tm_app gtm_imp b) c))
+        is_derivable (sq_build C l <{ b > c }>)
     | rl_forL C T l b c t :
         has_type C t T ->
-        is_derivable (sq_build C
-          (subst_last |(C)| t b :: l) c) ->
+        is_derivable (sq_build C (subst_last |(C)| t b :: l) c) ->
         is_derivable (sq_build C (<{for T, b}> :: l) c)
-    | rl_forR C T l b :
-        is_derivable (sq_build (C +: foldr ty_arr T (map (type_check C) (supp b))) l (
-          subst_last (S |(C)|)
-            (foldl tm_app (tm_lvl |(C)|) (supp b)) b
+    | rl_forR C T l b sb :
+        (forall t, t ∈ sb <-> t ∈ supp b) ->
+        is_derivable (sq_build (C +: foldr ty_arr T (has_type_other <$> sb)) l (
+          subst_last (S |(C)|) (foldl tm_app (tm_lvl |(C)|) sb) b
         )) ->
         is_derivable (sq_build C l <{for T, b}>)
-    | rl_exL C T l b c :
-        is_derivable (sq_build (C +: foldr ty_arr T (map (type_check C) (supp b))) ((
-          subst_last (S |(C)|)
-            (foldl tm_app (tm_lvl |(C)|) (supp b)) b
+    | rl_exL C T l b c sb :
+        (forall t, t ∈ sb <-> t ∈ supp b) ->
+        is_derivable (sq_build (C +: foldr ty_arr T (has_type_other <$> sb)) ((
+          subst_last (S |(C)|) (foldl tm_app (tm_lvl |(C)|) sb) b
         ) :: l) c) ->
         is_derivable (sq_build C (<{ex T, b}> :: l) c)
     | rl_exR C T l b t :
@@ -96,11 +108,11 @@ Module GLogic.
         is_derivable (sq_build C l (subst_last |(C)| t b)) ->
         is_derivable (sq_build C l <{ex T, b}>)
     | rl_nabL C T l b c n :
-        ~ elem_of (gtm_nom T n) (supp b) ->
+        gtm_nom T n ∉ supp b ->
         is_derivable (sq_build C (subst_last |(C)| (gtm_nom T n) b :: l) c) ->
         is_derivable (sq_build C (<{nab T, b}> :: l) c)
     | rl_nabR C T l b n :
-        ~ elem_of (gtm_nom T n) (supp b) ->
+        gtm_nom T n ∉ supp b ->
         is_derivable (sq_build C l (subst_last |(C)| (gtm_nom T n) b)) ->
         is_derivable (sq_build C l (<{nab T, b}>))
   .

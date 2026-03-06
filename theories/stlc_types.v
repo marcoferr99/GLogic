@@ -19,10 +19,6 @@ Module Type TY.
   Parameter ty_arr : ty -> ty -> ty.
   Parameter ty_other : ty -> Prop.
 
-  (*
-  Declare Instance eq_ty_dec : EqDecision ty.
-  *)
-
   Parameter ty_rect :
     forall P : ty -> Type,
     P ty_prp ->
@@ -36,51 +32,6 @@ Module Type TY.
   Axiom ty_rect_other : forall P p a d t,
     forall O : ty_other t, ty_rect P p a d t = d t O.
 End TY.
-
-Module TyChurch <: TY.
-  Inductive tyc : Set :=
-    | tyc_prp : tyc
-    | tyc_arr : tyc -> tyc -> tyc
-    | tyc_obj : tyc.
-
-  Definition ty := tyc.
-  Definition ty_prp := tyc_prp.
-  Definition ty_arr := tyc_arr.
-
-  Definition ty_other t : Prop :=
-    match t with
-    | tyc_prp => False
-    | tyc_arr _ _ => False
-    | _ => True
-    end.
-
-  (*
-  Instance eq_ty_dec : EqDecision ty.
-  Proof. solve_decision. Defined.
-  *)
-
-  Definition ty_rect :
-    forall P : ty -> Type,
-    P ty_prp ->
-    (forall t, P t -> forall s, P s -> P (ty_arr t s)) ->
-    (forall t, ty_other t -> P t) ->
-    forall t, P t :=
-    fun P p a (o : forall t, ty_other t -> P t) => tyc_rect P p a (o tyc_obj I).
-
-  Theorem ty_rect_prp P p a d : ty_rect P p a d ty_prp = p.
-  Proof. reflexivity. Qed.
-
-  Theorem ty_rect_arr P p a d A B :
-    ty_rect P p a d (ty_arr A B) =
-    a _ (ty_rect P p a d A) _ (ty_rect P p a d B).
-  Proof. reflexivity. Qed.
-
-  Theorem ty_rect_other P p a d t :
-    forall O : ty_other t, ty_rect P p a d t = d t O.
-  Proof.
-    intros. destruct t; simpl; destruct O. reflexivity.
-  Qed.
-End TyChurch.
 
 
 (** ** Theories *)
@@ -106,11 +57,6 @@ Module TyTheories (Ty : TY) (Rlist : RLIST).
   Hint Rewrite ty_rect_other using assumption : ty.
   Ltac ty_simpl := repeat (simpl in *; autorewrite with ty in *).
 
-
-  (*
-  Definition ty_match {T : Set} p a d : ty -> T :=
-    ty_rec (fun _ => T) p (fun A _ B _ => a A B) (fun _ => d).
-    *)
 
   Definition ty_rec (P : ty -> Set) := ty_rect P.
   Definition ty_ind (P : ty -> Prop) := ty_rect P.
@@ -157,19 +103,3 @@ Module TyTheories (Ty : TY) (Rlist : RLIST).
 
   Definition context := rlist ty.
 End TyTheories.
-
-
-(** ** Church Implementation *)
-
-Module TyChurchTheories.
-  Module TyTheories := TyTheories TyChurch RlistList.
-  Import TyTheories.
-
-  Notation "'i'" := tyc_obj (in custom stlc_ty at level 0) : stlc_scope.
-
-  (** Examples *)
-  Check -[ o ]-.
-  Check -[ o -> i ]-.
-  Check -[ o -> (i -> o) ]-.
-  Check -[ (o -> i) -> o ]-.
-End TyChurchTheories.
