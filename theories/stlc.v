@@ -173,6 +173,11 @@ Module StlcTheories (Stlc : STLC).
         has_type c (tm_abs A t) (ty_arr A B)
     | ht_other c t : tm_other t -> has_type c t (has_type_other t).
 
+  Theorem ht_other2 c T t :
+    tm_other t -> T = has_type_other t ->
+    has_type c t T.
+  Proof. intros ? ->. now constructor. Qed.
+
   Theorem has_type_lvl : forall c n T,
     has_type c (tm_lvl n) T <-> c !! n = Some T.
   Proof.
@@ -467,15 +472,67 @@ Module StlcTheories (Stlc : STLC).
       assumption.
   Qed.
 
+  Theorem has_type_subst C T R t r :
+    |(C)| <= |(R)| -> |(r)| = |(R)| ->
+    (forall n rn Rn, r !! n = Some rn -> R !! n = Some Rn -> has_type C rn Rn) ->
+    has_type C (subst |(C)| r t) T <-> has_type R t T.
+  Proof.
+    split; intros.
+    - eapply has_type_subst2; eassumption.
+    - eapply has_type_subst1; eassumption.
+  Qed.
 
   Definition subst_last m s := subst m (build_rlist m tm_lvl +: s).
+  Definition subst_last2 n m s := subst n (build_rlist m tm_lvl +: s).
+
+  Theorem has_type_subst_last2_1 C D T X s t :
+    (forall n, n < |(C)| -> C !! n = D !! n) ->
+    has_type D s T ->
+    has_type (C +: T) t X -> has_type D (subst_last2 |(D)| |(C)| s t) X.
+  Proof.
+    intros HD Hs Ht. eapply has_type_subst1; try eassumption.
+    - repeat rewrite rlength_rcons. now rewrite rlength_build_rlist.
+    - intros. destruct (lt_total n |(C)|) as [Ln | [En | Gn]].
+      + rewrite @lookup_rcons_lt in H, H0; try assumption.
+        * rewrite lookup_build_rlist in H; [|assumption].
+          injection H. intros <-.
+          tm_simpl. now rewrite <- HD.
+        * now rewrite rlength_build_rlist.
+      + rewrite @lookup_rcons_eq in H, H0; try assumption.
+        * injection H. injection H0. intros <- <-. assumption.
+        * now rewrite rlength_build_rlist.
+      + rewrite lookup_rcons_gt in H0; [discriminate|lia].
+  Qed.
+
+  Theorem has_type_subst_last2_2 C D T X s t :
+    |(D)| <= S |(C)| ->
+    (forall n, n < |(C)| -> C !! n = D !! n) ->
+    has_type D s T ->
+    has_type D (subst_last2 |(D)| |(C)| s t) X -> has_type (C +: T) t X.
+  Proof.
+    intros L HD Hs Ht. eapply has_type_subst2; try eassumption.
+    - now rewrite rlength_rcons.
+    - repeat rewrite rlength_rcons. now rewrite rlength_build_rlist.
+    - intros. destruct (lt_total n |(C)|) as [Ln | [En | Gn]].
+      + rewrite @lookup_rcons_lt in H, H0; try assumption.
+        * rewrite lookup_build_rlist in H; [|assumption].
+          injection H. intros <-.
+          tm_simpl. now rewrite <- HD.
+        * now rewrite rlength_build_rlist.
+      + rewrite @lookup_rcons_eq in H, H0; try assumption.
+        * injection H. injection H0. intros <- <-. assumption.
+        * now rewrite rlength_build_rlist.
+      + rewrite lookup_rcons_gt in H0; [discriminate|lia].
+  Qed.
 
   Theorem has_type_subst_last C T X s t :
-    has_type (C +: T) t X -> has_type C s T ->
-    has_type C (subst_last |(C)| s t) X.
+    has_type C s T ->
+    has_type (C +: T) t X <-> has_type C (subst_last |(C)| s t) X.
   Proof.
-    intros Ht Hs.
-    eapply has_type_subst1; try eassumption.
+    intros Hs.
+    unfold subst_last. rewrite has_type_subst.
+    - split; intros H; apply H.
+    - rewrite rlength_rcons. lia.
     - repeat rewrite rlength_rcons. f_equal.
       apply rlength_build_rlist.
     - intros.
@@ -528,7 +585,7 @@ Module StlcTheories (Stlc : STLC).
     | bs_subst T t s : beta_step m (tm_app (tm_abs T t) s) (subst_last m s t)
     | bs_appL a b t : beta_step m a b -> beta_step m (tm_app a t) (tm_app b t)
     | bs_appR s a b : beta_step m a b -> beta_step m (tm_app s a) (tm_app s b)
-    | bs_abs T a b : beta_step m a b -> beta_step m (tm_abs T a) (tm_abs T b).
+    | bs_abs T a b : beta_step (S m) a b -> beta_step m (tm_abs T a) (tm_abs T b).
 
 
   Definition beta_reduction m (t : tm) : tm :=
@@ -570,10 +627,12 @@ Module StlcTheories (Stlc : STLC).
 
 
   Inductive eta_step m : tm -> tm -> Prop :=
-    | es_f T t n : eta_step m (tm_abs T (tm_app t (tm_lvl n))) (bound_level_map (fun x => x - 1) m t)
+    | es_f T t :
+        contains_bound_levels m 1 t = false ->
+        eta_step m (tm_abs T (tm_app t m)) (bound_level_map (fun x => x - 1) m t)
     | es_appL a b t : eta_step m a b -> eta_step m (tm_app a t) (tm_app b t)
     | es_appR s a b : eta_step m a b -> eta_step m (tm_app s a) (tm_app s b)
-    | es_abs T a b : eta_step m a b -> eta_step m (tm_abs T a) (tm_abs T b).
+    | es_abs T a b : eta_step (S m) a b -> eta_step m (tm_abs T a) (tm_abs T b).
 
 
   Definition eta_reduction m (t : tm) : tm :=
@@ -641,6 +700,53 @@ Module StlcTheories (Stlc : STLC).
   Hint Rewrite eta_reduction_app : tm.
 
 
+  Theorem has_type_beta_step C T a b :
+    beta_step |(C)| a b ->
+    has_type C a T -> has_type C b T.
+  Proof.
+    intros BS. remember |(C)| as l.
+    generalize dependent T. generalize dependent C.
+    induction BS; intros C Hl X H; tm_simpl.
+    - destruct H as (A & HA1 & HA2). subst.
+      eapply has_type_subst_last; [eassumption|].
+      tm_simpl. destruct HA1 as (B & HB1 & HB2).
+      ty_injection HB2. intros E1 E2.
+      to_ty E1. to_ty E2. now subst.
+    - destruct H as (A & HA1 & HA2).
+      exists A. split; auto.
+    - destruct H as (A & HA1 & HA2).
+      exists A. split; auto.
+    - destruct H as (B & HB1 & HB2).
+      exists B. split; [|easy].
+      apply IHBS; [|assumption].
+      subst. symmetry. apply rlength_rcons.
+  Qed.
+
+  Theorem has_type_eta_step C T a b :
+    eta_step |(C)| a b ->
+    has_type C a T -> has_type C b T.
+  Proof.
+    intros ES. remember |(C)| as l.
+    generalize dependent T. generalize dependent C.
+    induction ES; intros C Hl X HT; tm_simpl.
+    - destruct HT as (B & HB1 & HB2). subst.
+      apply (has_type_bound_level_map2 1 _ (C +: T)).
+      + apply rlength_rcons.
+      + intros x Hx. now apply lookup_rcons_lt.
+      + rewrite bound_level_map_id; [|assumption].
+        tm_simpl. destruct HB1 as (A & HA1 & HA2).
+        tm_simpl. rewrite @lookup_rcons_eq in HA2; [|reflexivity].
+        injection HA2. now intros ->.
+    - destruct HT as (A & HA1 & HA2).
+      exists A. split; auto.
+    - destruct HT as (A & HA1 & HA2).
+      exists A. split; auto.
+    - destruct HT as (B & HB1 & HB2).
+      exists B. split; [|easy].
+      apply IHES; [|assumption].
+      subst. symmetry. apply rlength_rcons.
+  Qed.
+
   Theorem has_type_beta_reduction C T t :
     has_type C t T ->
     has_type C (beta_reduction |(C)| t) T.
@@ -657,7 +763,7 @@ Module StlcTheories (Stlc : STLC).
       + rewrite beta_reduction_app; [|auto].
         tm_simplg. exists B. split; auto.
       + destruct H as (T & t & Ht). subst. tm_simplg.
-        eapply has_type_subst_last; [|eauto].
+        eapply has_type_subst_last; [eauto|].
         apply IHt1 in Ht1 as F. tm_simpl.
         destruct F as (D & HD1 & HD2).
         apply ty_arr_inj in HD2. destruct HD2. now subst.
@@ -720,4 +826,13 @@ Module StlcTheories (Stlc : STLC).
         lambda_equiv m a b -> beta_step m b c -> lambda_equiv m a c
     | le_eta a b c :
         lambda_equiv m a b -> eta_step m b c -> lambda_equiv m a c.
+
+  Theorem has_type_lambda_equiv C T a b :
+    lambda_equiv |(C)| a b ->
+    has_type C a T -> has_type C b T.
+  Proof.
+    intros LE HT. induction LE; try easy.
+    - eapply has_type_beta_step; eauto.
+    - eapply has_type_eta_step; eauto.
+  Qed.
 End StlcTheories.

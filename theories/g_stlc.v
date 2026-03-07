@@ -110,7 +110,7 @@ Module GStlcTheories.
 
   Fixpoint tm_permut (f : ty -> nat -> nat) t : tm :=
     match t with
-    | gtm_nom T a => f T a
+    | gtm_nom T a => gtm_nom T (f T a)
     | gtm_abs T t => tm_abs T (tm_permut f t)
     | gtm_app s t => tm_app (tm_permut f s) (tm_permut f t)
     | x => x
@@ -122,12 +122,33 @@ Module GStlcTheories.
       (forall x, g (f x) = x) ->
       invertible f.
 
+  Theorem has_type_tm_permut f C T t :
+    has_type C t T <-> has_type C (tm_permut f t) T.
+  Proof.
+    generalize dependent T. generalize dependent C.
+    induction t; intros C T; tm_simpl; try easy.
+    - split; intros (A & HA1 & HA2); exists A; split;
+        try (now apply IHt1); now apply IHt2.
+    - split; intros (B & HB1 & HB2); exists B; split;
+        now try apply IHt.
+    - split; intros H; inversion H; subst; now tm_simpl.
+  Qed.
+
   Inductive tm_equiv m : tm -> tm -> Prop :=
     tm_equiv_intro a b f :
       (forall T, invertible (f T)) -> lambda_equiv m a (tm_permut f b) ->
       tm_equiv m a b.
 
+  Theorem has_type_tm_equiv C T a b : tm_equiv |(C)| a b ->
+    has_type C a T -> has_type C b T.
+  Proof.
+    intros TE HT. induction TE.
+    eapply has_type_tm_permut.
+    eapply has_type_lambda_equiv; eassumption.
+  Qed.
+
   Parameter supp : tm -> list tm.
+  Axiom supp_other : forall t x, x ∈ supp t -> tm_other x.
 End GStlcTheories.
 
 

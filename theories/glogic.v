@@ -1,4 +1,4 @@
-From stdpp Require Import list.
+From stdpp Require Import list sets.
 Require Import g_stlc.
 
 
@@ -14,6 +14,10 @@ Module Type SQ_SET.
   Declare Instance sq_set_empty : Empty sq_set.
   Declare Instance sq_set_singleton : Singleton tm sq_set.
   Declare Instance sq_set_union : Union sq_set.
+  Declare Instance sq_set_semi_set : SemiSet _ sq_set.
+  Parameter sq_set_map : (tm -> tm) -> sq_set -> sq_set.
+  Axiom sq_set_map_spec :
+    forall f s t, t ∈ sq_set_map f s <-> exists a, a ∈ s /\ t = f a.
 End SQ_SET.
 
 Notation "x :: X" := (X ∪ {[x]}) : stlc_scope.
@@ -38,6 +42,7 @@ Module GLogic (SqSet : SQ_SET).
 
   Inductive is_derivable : sequent -> Prop :=
     | rl_id C a b :
+        has_type C a ty_prp ->
         tm_equiv |(C)| a b ->
         is_derivable (sq_build C {[a]} b)
     | rl_cut C l m b c :
@@ -93,15 +98,15 @@ Module GLogic (SqSet : SQ_SET).
         is_derivable (sq_build C (<{for T, b}> :: l) c)
     | rl_forR C T l b sb :
         (forall t, t ∈ sb <-> t ∈ supp b) ->
-        is_derivable (sq_build (C +: foldr ty_arr T (has_type_other <$> sb)) l (
-          subst_last (S |(C)|) (foldl tm_app (tm_lvl |(C)|) sb) b
+        is_derivable (sq_build (C +: foldr ty_arr T (has_type_other <$> sb)) (sq_set_map (bound_level_map S |(C)|) l) (
+          subst_last2 (S |(C)|) |(C)| (foldl tm_app (tm_lvl |(C)|) sb) b
         )) ->
         is_derivable (sq_build C l <{for T, b}>)
     | rl_exL C T l b c sb :
         (forall t, t ∈ sb <-> t ∈ supp b) ->
         is_derivable (sq_build (C +: foldr ty_arr T (has_type_other <$> sb)) ((
-          subst_last (S |(C)|) (foldl tm_app (tm_lvl |(C)|) sb) b
-        ) :: l) c) ->
+          subst_last2 (S |(C)|) |(C)| (foldl tm_app (tm_lvl |(C)|) sb) b
+        ) :: (sq_set_map (bound_level_map S |(C)|) l)) (bound_level_map S |(C)| c)) ->
         is_derivable (sq_build C (<{ex T, b}> :: l) c)
     | rl_exR C T l b t :
         has_type C t T ->
@@ -117,79 +122,148 @@ Module GLogic (SqSet : SQ_SET).
         is_derivable (sq_build C l (<{nab T, b}>))
   .
 
-  (*
+  Theorem th C T h l t :
+    Forall2 (fun x X => has_type C x X) l h ->
+    has_type C t (foldr ty_arr T h) ->
+    has_type C (foldl tm_app t l) T.
+  Proof.
+    generalize dependent t. generalize dependent h.
+    induction l; intros h t F Ht.
+    - inversion F. now subst.
+    - simpl. destruct h; inversion F. subst.
+      eapply IHl; try eassumption.
+      tm_simpl. exists t0. now split.
+  Qed.
+
   Theorem is_derivable_wf K : is_derivable K -> wf_sequent K.
   Proof.
-    intros D. induction D; simpl in *; intuition;
-    try solve [
-      try match goal with
-        [H : _ |- _] => inversion H; clear H; subst
-      end; try assumption;
-      repeat econstructor; eassumption
-    ].
-    - inversion H2. now apply Forall_app.
-    - inversion H0. inversion H2. subst.
-      repeat (econstructor; try eassumption).
-    - inversion H1. subst. clear H1.
-      constructor; [|assumption]. clear D H5 H0.
-      econstructor; constructor.
-      eapply has_type_subst2; try eassumption;
-        [repeat rewrite length_app; simpl; lia|].
-      apply Forall2_app; [|repeat constructor; assumption].
-      unfold lvl_seq at 2. simpl. rewrite app_nil_r.
-      generalize (has_type_seq [] (C ++ c) []).
-      rewrite app_nil_r. simpl. auto.
-    - econstructor; constructor.
-      eapply has_type_subst2.
-      3:{
-        replace (|(C ++ c)| + 1) with
-          |(C +: foldr ty_arr S c ++ c)| in H;
-          [|repeat rewrite length_app; simpl; lia].
-        apply H.
-      }
-      + repeat rewrite length_app. simpl. lia.
-      + repeat apply Forall2_app.
-        * generalize (has_type_seq []). intros HS.
-          simpl in HS. rewrite <- app_assoc. apply HS.
-        * generalize (has_type_seq (C +: foldr ty_arr S c) c []).
-          rewrite length_app. rewrite app_nil_r.
-          simpl. intros HS. apply HS.
-        * repeat constructor.
-          clear dependent l s.
-          induction c.
+    intros D. induction D; simpl in *.
+    - split.
+      + eapply has_type_tm_equiv; eassumption.
+      + intros t Ht.
+        apply elem_of_singleton in Ht. now subst.
+    - intuition. apply elem_of_union in H3 as [Ht | Ht]; [auto|].
+      + apply H2. apply elem_of_union. now left.
+    - intuition. apply H0. apply elem_of_union. now left.
+    - intuition. set_unfold. destruct H2; [auto|].
+      now subst.
+    - intuition. set_unfold. subst. now constructor.
+    - intuition.
+      + now constructor.
+      + now set_unfold.
+    - intuition. set_unfold. destruct H3.
+      + apply H0. intuition.
+      + subst. econstructor; [econstructor|]; intuition.
+        now apply ht_other2.
+    - intuition. econstructor; [econstructor|]; try eassumption.
+      now apply ht_other2.
+    - intuition. econstructor; [econstructor|]; try eassumption.
+      now apply ht_other2.
+    - intuition. set_unfold. destruct H2; [intuition|].
+      subst. econstructor; [econstructor|].
+      + now apply ht_other2.
+      + apply H1. intuition.
+      + assumption.
+    - intuition. set_unfold. destruct H2; [intuition|].
+      subst. econstructor; [econstructor|].
+      + now apply ht_other2.
+      + assumption.
+      + apply H1. intuition.
+    - intuition. econstructor; [econstructor|]; try eassumption.
+      now apply ht_other2.
+    - intuition. set_unfold. destruct H3; intuition.
+      subst. econstructor; [econstructor|].
+      + now apply ht_other2.
+      + assumption.
+      + apply H2. intuition.
+    - intuition.
+      + econstructor; [econstructor|].
+        * now apply ht_other2.
+        * apply H0. set_unfold. intuition.
+        * assumption.
+      + apply H0. set_unfold. intuition.
+    - intuition. set_unfold. destruct H2.
+      + apply H1. intuition.
+      + subst. econstructor.
+        * now apply ht_other2.
+        * tm_simpl. exists ty_prp. split; [|reflexivity].
+          eapply has_type_subst_last; eauto.
+    - intuition; [econstructor|].
+      + now apply ht_other2.
+      + tm_simpl. exists ty_prp. intuition.
+        eapply (has_type_subst_last2_2 _ (C +: foldr ty_arr T (has_type_other <$> sb))).
+        4:{ rewrite rlength_rcons. eassumption. }
+        * now rewrite rlength_rcons.
+        * intros. now rewrite lookup_rcons_lt.
+        * clear D H0 H1.
+          eapply th.
+          2:{
+            tm_simpl. now rewrite @lookup_rcons_eq.
+          }
+          remember (C +: foldr ty_arr T (has_type_other <$> sb)) as D.
+          clear HeqD.
+          assert (forall t, t ∈ sb -> t ∈ supp b). { intros. now apply H. }
+          clear H.
+          induction sb.
           -- simpl. constructor.
-             replace (C +: S ++ []) with (C ++ S :: []);
-               [|symmetry; apply app_nil_r].
-             now apply list_lookup_middle.
-          -- simpl.
-             Search lookup length.
-          eapply has_type_subst2.
-          inversion H0; subst.
-          -- destruct D.
-      + apply (has_type_seq []).
-      unfold wf_judgement in *.
-      eapply has_type_subst_ind2.
-      unfold subst_ind in *. rewrite Nat.add_0_r in H4.
-      eapply has_type_subst2 in H4; try eassumption.
-      + repeat rewrite length_app. simpl. lia.
-      + apply Forall2_app.
-        * remember (C0 ++ c) as L.
-          clear dependent C0. clear H.
-          assert (F : forall n, Forall2 (fun (si : tm) (Si : ty) => <| L |- si : Si |>) (map tm_lvl (seq n (length L))) L); [|apply F].
-          replace L with (rev (rev L));
-            [|apply rev_involutive].
-          remember (rev L) as m. clear dependent L.
-          induction m; [constructor|].
-          intros n. simpl.
-          rewrite length_app. rewrite seq_app. simpl.
-          rewrite map_app. simpl.
-          apply Forall2_app.
-          --
-          replace (length (a :: L)) with (S (length L));
-            [|reflexivity].
-          intros n. simpl. constructor.
-          rewrite seq_S. simpl.
-          simpl. constructor.
+          -- simpl in *. constructor.
+             ++ constructor. eapply supp_other. apply H0. set_unfold. intuition.
+             ++ apply IHsb. intros. apply H0. set_unfold. intuition.
+      + eapply (has_type_bound_level_map2 1).
+        3:{
+          specialize H1 with (bound_level_map S |(C)| t0).
+          unfold bound_level_map in *. erewrite level_map_f_eq.
+          - apply H1. apply sq_set_map_spec. exists t0. now split.
+          - simpl. now intros n.
+        }
+        * apply rlength_rcons.
+        * intros n Hn. now apply lookup_rcons_lt.
+    - set_unfold. intuition.
+      + eapply (has_type_bound_level_map2 1); try eassumption.
+        * apply rlength_rcons.
+        * intros n Hn. now apply lookup_rcons_lt.
+      + eapply (has_type_bound_level_map2 1).
+        3:{
+          specialize H1 with (bound_level_map S |(C)| x).
+          unfold bound_level_map in *. erewrite level_map_f_eq.
+          - apply H1. left. apply sq_set_map_spec. exists x. intuition.
+          - intros. now simpl.
+        }
+        * apply rlength_rcons.
+        * intros n Hn. now apply lookup_rcons_lt.
+      + subst. econstructor; [now apply ht_other2|].
+        tm_simpl. exists ty_prp. intuition.
+        eapply (has_type_subst_last2_2 _ (C +: foldr ty_arr T (has_type_other <$> sb))).
+        4:{ rewrite rlength_rcons. apply H1. now right. }
+        * now rewrite rlength_rcons.
+        * intros. symmetry. now apply lookup_rcons_lt.
+        * clear D H0 H1.
+          eapply th.
+          2:{
+            tm_simpl. now rewrite @lookup_rcons_eq.
+          }
+          remember (C +: foldr ty_arr T (has_type_other <$> sb)) as D.
+          clear HeqD.
+          assert (forall t, t ∈ sb -> t ∈ supp b). { intros. now apply H. }
+          clear H.
+          induction sb.
+          -- simpl. constructor.
+          -- simpl in *. constructor.
+             ++ constructor. eapply supp_other. apply H0. set_unfold. intuition.
+             ++ apply IHsb. intros. apply H0. set_unfold. intuition.
+    - intuition. econstructor; [now apply ht_other2|].
+      tm_simpl. exists ty_prp. split; [|easy].
+      eapply has_type_subst_last; eauto.
+    - intuition. set_unfold. destruct H2.
+      + apply H1. intuition.
+      + subst. econstructor; [now apply ht_other2|].
+        tm_simpl. eexists. split; [|reflexivity].
+        eapply has_type_subst_last.
+        2:{ apply H1. now right. }
+        now constructor.
+    - intuition. econstructor; [now apply ht_other2|].
+      tm_simpl. eexists. split; [|reflexivity].
+      eapply has_type_subst_last; try eassumption.
+      now constructor.
   Qed.
-  *)
 End GLogic.

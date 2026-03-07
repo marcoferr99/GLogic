@@ -56,6 +56,7 @@ Module TyTheories (Ty : TY) (Rlist : RLIST).
   Hint Rewrite ty_rect_prp ty_rect_arr : ty.
   Hint Rewrite ty_rect_other using assumption : ty.
   Ltac ty_simpl := repeat (simpl in *; autorewrite with ty in *).
+  Ltac ty_simpl1 H := repeat (simpl in H; autorewrite with ty in H).
 
 
   Definition ty_rec (P : ty -> Set) := ty_rect P.
@@ -88,6 +89,11 @@ Module TyTheories (Ty : TY) (Rlist : RLIST).
   Qed.
 
   Hint Rewrite to_tyv_arr to_ty_to_tyv : ty.
+
+
+  Ltac tyv_f_equal H := apply (f_equal to_tyv) in H; ty_simpl1 H.
+  Ltac ty_injection H := tyv_f_equal H; injection H.
+  Ltac to_ty H := apply (f_equal to_ty) in H; ty_simpl1 H.
 
 
   Theorem ty_arr_inj A B C D :
