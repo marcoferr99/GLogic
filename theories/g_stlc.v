@@ -3,8 +3,7 @@ Require Export stlc.
 
 Module GStlc <: STLC.
   Declare Module Ty : TY.
-  Declare Module Rlist : RLIST.
-  Module TyTheories := TyTheories Ty Rlist.
+  Module TyTheories := TyTheories Ty.
   Export TyTheories.
 
   Inductive gtm : Set :=
@@ -55,7 +54,7 @@ Module GStlc <: STLC.
     destruct t; simpl; destruct O; reflexivity.
   Qed.
 
-  Definition has_type_other t :=
+  Definition type_check_other t :=
     match t with
     | gtm_bot => ty_prp
     | gtm_top => ty_prp
@@ -99,20 +98,11 @@ Module GStlcTheories.
       t custom stlc_tm at level 200, left associativity) : stlc_scope.
 
 
-  (*
-  Record permut : Set := {
-    permutf : nat -> nat;
-    permutb : nat -> nat;
-    _ : forall n, permutf (permutb n) = n;
-    _ : forall n, permutb (permutf n) = n;
-  }.
-  *)
-
-  Fixpoint tm_permut (f : ty -> nat -> nat) t : tm :=
+  Fixpoint nom_map (f : ty -> nat -> nat) t : tm :=
     match t with
     | gtm_nom T a => gtm_nom T (f T a)
-    | gtm_abs T t => tm_abs T (tm_permut f t)
-    | gtm_app s t => tm_app (tm_permut f s) (tm_permut f t)
+    | gtm_abs T t => tm_abs T (nom_map f t)
+    | gtm_app s t => tm_app (nom_map f s) (nom_map f t)
     | x => x
     end.
 
@@ -122,33 +112,37 @@ Module GStlcTheories.
       (forall x, g (f x) = x) ->
       invertible f.
 
-  Theorem has_type_tm_permut f C T t :
-    has_type C t T <-> has_type C (tm_permut f t) T.
+  Theorem has_type_nom_map f C T t :
+    has_type C t T <-> has_type C (nom_map f t) T.
   Proof.
-    generalize dependent T. generalize dependent C.
+    revert C T.
     induction t; intros C T; tm_simpl; try easy.
-    - split; intros (A & HA1 & HA2); exists A; split;
-        try (now apply IHt1); now apply IHt2.
-    - split; intros (B & HB1 & HB2); exists B; split;
-        now try apply IHt.
+    - split; intros [A]; exists A; now first [apply IHt1|apply IHt2].
+    - split; intros [B]; exists B; now try apply IHt.
     - split; intros H; inversion H; subst; now tm_simpl.
   Qed.
 
   Inductive tm_equiv m : tm -> tm -> Prop :=
     tm_equiv_intro a b f :
-      (forall T, invertible (f T)) -> lambda_equiv m a (tm_permut f b) ->
+      (forall T, invertible (f T)) -> lambda_equiv m a (nom_map f b) ->
       tm_equiv m a b.
 
-  Theorem has_type_tm_equiv C T a b : tm_equiv |(C)| a b ->
+  Theorem has_type_tm_equiv (C : context) T a b : tm_equiv C a b ->
     has_type C a T -> has_type C b T.
   Proof.
     intros TE HT. induction TE.
-    eapply has_type_tm_permut.
+    eapply has_type_nom_map.
     eapply has_type_lambda_equiv; eassumption.
   Qed.
 
-  Parameter supp : tm -> list tm.
-  Axiom supp_other : forall t x, x ∈ supp t -> tm_other x.
+  Inductive in_supp : tm -> tm -> Prop :=
+    | is_nom T n : in_supp (gtm_nom T n) (gtm_nom T n)
+    | is_appL a b n : in_supp a n -> in_supp (gtm_app a b) n
+    | is_appR a b n : in_supp b n -> in_supp (gtm_app a b) n
+    | is_abs T t n : in_supp t n -> in_supp (gtm_abs T t) n.
+
+  Theorem in_supp_other b t : in_supp b t -> tm_other t.
+  Proof. intros H. induction H; easy. Qed.
 End GStlcTheories.
 
 

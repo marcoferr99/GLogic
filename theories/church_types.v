@@ -45,7 +45,7 @@ End TyChurch.
 
 
 Module TyChurchTheories.
-  Module TyTheories := TyTheories TyChurch RlistList.
+  Module TyTheories := TyTheories TyChurch.
   Import TyTheories.
 
   Notation "'i'" := tyc_obj (in custom stlc_ty at level 0) : stlc_scope.

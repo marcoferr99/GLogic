@@ -1,5 +1,4 @@
-From stdpp Require Export decidable.
-Require Export rlist.
+Require Export base rlist.
 
 
 (*********************************************)
@@ -8,8 +7,6 @@ Require Export rlist.
 
 
 (** ** Interface *)
-
-Declare Custom Entry stlc_ty.
 
 (** Interface for the types of stlc.  There must be a type for propositions and
     an arrow type. *)
@@ -36,11 +33,10 @@ End TY.
 
 (** ** Theories *)
 
-Module TyTheories (Ty : TY) (Rlist : RLIST).
-  Export Ty.
-  Module RlistTheories := RlistTheories Rlist.
-  Export RlistTheories.
+Declare Custom Entry stlc_ty.
 
+Module TyTheories (Ty : TY).
+  Export Ty.
 
   (** Notations *)
   Notation "-[ x ]-" := x (x custom stlc_ty) : stlc_scope.
@@ -55,8 +51,9 @@ Module TyTheories (Ty : TY) (Rlist : RLIST).
   Create HintDb ty.
   Hint Rewrite ty_rect_prp ty_rect_arr : ty.
   Hint Rewrite ty_rect_other using assumption : ty.
-  Ltac ty_simpl := repeat (simpl in *; autorewrite with ty in *).
-  Ltac ty_simpl1 H := repeat (simpl in H; autorewrite with ty in H).
+  Tactic Notation "ty_simpl" := repeat (simpl; autorewrite with ty).
+  Tactic Notation "ty_simpl" "in" ident(H) := repeat (simpl in H; autorewrite with ty in H).
+  Tactic Notation "ty_simpl" "in" "*" := repeat (simpl in *; autorewrite with ty in *).
 
 
   Definition ty_rec (P : ty -> Set) := ty_rect P.
@@ -73,6 +70,12 @@ Module TyTheories (Ty : TY) (Rlist : RLIST).
       (fun _ fA _ fB => tyv_arr fA fB)
       (fun T _ => tyv_other T).
 
+  Theorem to_tyv_arr A B :
+    to_tyv (ty_arr A B) = tyv_arr (to_tyv A) (to_tyv B).
+  Proof. unfold to_tyv. now ty_simpl. Qed.
+
+  Hint Rewrite to_tyv_arr : ty.
+
   Fixpoint to_ty T : ty :=
     match T with
     | tyv_prp => ty_prp
@@ -80,22 +83,37 @@ Module TyTheories (Ty : TY) (Rlist : RLIST).
     | tyv_other T => T
     end.
 
-  Theorem to_tyv_arr A B : to_tyv (ty_arr A B) = tyv_arr (to_tyv A) (to_tyv B).
-  Proof. unfold to_tyv. now ty_simpl. Qed.
 
   Theorem to_ty_to_tyv T : to_ty (to_tyv T) = T.
   Proof.
-    induction T using ty_ind; unfold to_tyv, ty_rec in *; ty_simpl; congruence.
+    induction T using ty_ind; ty_simpl; try congruence;
+    unfold to_tyv; ty_simpl; congruence.
   Qed.
 
+  Ltac to_tyv H := apply (f_equal to_tyv) in H; ty_simpl in H.
+  Ltac to_ty H :=
+    match type of H with
+    | to_tyv ?x = to_tyv ?y => apply (f_equal to_ty) in H; repeat rewrite to_ty_to_tyv in H
+    end.
+  Tactic Notation "to_ty" := match goal with [H : _ |- _] => to_ty H end.
+  Ltac ty_injection H := to_tyv H; injection H; intros; repeat to_ty; subst.
+
+  (*
+  Theorem to_tyv_arr A B : to_tyv (ty_arr A B) = tyv_arr (to_tyv A) (to_tyv B).
+  Proof. unfold to_tyv. now ty_simpl. Qed.
+
   Hint Rewrite to_tyv_arr to_ty_to_tyv : ty.
+  *)
 
 
+  (*
   Ltac tyv_f_equal H := apply (f_equal to_tyv) in H; ty_simpl1 H.
   Ltac ty_injection H := tyv_f_equal H; injection H.
   Ltac to_ty H := apply (f_equal to_ty) in H; ty_simpl1 H.
+  *)
 
 
+  (*
   Theorem ty_arr_inj A B C D :
     ty_arr A B = ty_arr C D -> A = C /\ B = D.
   Proof.
@@ -105,6 +123,7 @@ Module TyTheories (Ty : TY) (Rlist : RLIST).
     apply (f_equal to_ty) in H1, H2. ty_simpl.
     now split.
   Qed.
+  *)
 
 
   Definition context := rlist ty.
