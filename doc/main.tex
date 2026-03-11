@@ -35,11 +35,15 @@
 \newcommand*{\tpquant}[2]{#1_{#2}}
 \newcommand*{\tmapp}[2]{#1 \, #2}
 \newcommand*{\tmabs}[2]{\tpquant{\lambda}{#1} \, #2}
+\newcommand*{\tmnom}[2]{#2^{#1}}
 \newcommand*{\tmimp}[2]{\ifempty{#1}{\,}{#1} \supset \ifempty{#2}{\,}{#2}}
 \newcommand*{\tmfors}[1]{\tpquant{\forall}{#1}}
 \newcommand*{\tmfor}[2]{\tmfors{#1} \, #2}
 \newcommand*{\tmexs}[1]{\tpquant{\exists}{#1}}
 \newcommand*{\tmex}[2]{\tmexs{#1} \, #2}
+\newcommand*{\tmnabs}[1]{\tpquant{\nabla}{#1}}
+\newcommand*{\tmnab}[2]{\tmnabs{#1} \, #2}
+\newcommand*{\tmequiv}[2]{#1 \approx #2}
 
 \newcommand*{\hastype}[3]{#1 \vdash #2 : #3}
 \newcommand*{\nth}[2]{#1_{#2}}
@@ -50,6 +54,9 @@
 \newcommand*{\incrbound}[1]{#1^+}
 \newcommand*{\decrbound}[1]{#1^-}
 \newcommand*{\subst}[3]{#1 \, [#3]_{#2}}
+\newcommand*{\substl}[4]{#4 \, [#3]_{#1}^{#2}}
+\newcommand*{\nommap}[2]{#1. #2}
+\newcommand*{\supp}[1]{\mathrm{supp}(#1)}
 
 \newcommand*{\listappel}[2]{#1, #2}
 \newcommand*{\listapp}[2]{#1 \, #2}
@@ -59,9 +66,14 @@
 \newcommand*{\listsep}{; \,}
 \newcommand*{\length}[1]{|#1|}
 \newcommand*{\dotlist}[3]{#1_{#2}, \dots, #1_{#3}}
+\newcommand*{\setenum}[1]{\{#1\}}
+\newcommand*{\setcomp}[2]{\left\{{#1} \,\middle|\, {#2}\right\}}
 
-\newcommand*{\betared}[2]{\mathrm{red}_{\beta}^{#1}#2}
-\newcommand*{\etared}[2]{\mathrm{red}_{\eta}^{#1}#2}
+\newcommand*{\step}[3]{\mathrm{step}_{#1}^{#2}#3}
+\newcommand*{\betaconv}[2]{\mathrm{conv}_{\beta}^{#1}#2}
+\newcommand*{\etaconv}[2]{\mathrm{conv}_{\eta}^{#1}#2}
+\newcommand*{\betastep}[2]{\mathrm{step}_{\beta}^{#1}#2}
+\newcommand*{\etastep}[2]{\mathrm{step}_{\eta}^{#1}#2}
 
 
 \begin{document}
@@ -90,7 +102,7 @@ We consider $\tyarr{}{}$ to be right associative, and thus $\tyarr{\typrp}{\tyar
 
 We define the terms of the simply typed lambda calculus (using the Bruijn levels) as:
 \[
-    \inddef{t}{\lvln \mid \tmapp{t}{t} \mid \tmabs{T}{t} \mid \alpha \mid \tmfors{T} \mid \tmexs{T}}
+    \inddef{t}{\lvln \mid \tmapp{t}{t} \mid \tmabs{T}{t} \mid \tmnom{T}{n} \mid \alpha \mid \tmfors{T} \mid \tmexs{T} \mid \tmnabs{T}}
 \]
 where $\lvln$ is a natural number, $T$ is a type and $\alpha$ is one of the following symbols:
 \[
@@ -134,7 +146,9 @@ Given a list of types $\Gamma$, a natural number $n$ and a type $T$, we denote t
         %
         \inferrule{ }{\hastype{\Gamma}{\tmfors{T}}{\tyarr{(\tyarr{T}{\typrp})}{\typrp}}} \\
         %
-        \inferrule{ }{\hastype{\Gamma}{\tmexs{T}}{\tyarr{(\tyarr{T}{\typrp})}{\typrp}}}
+        \inferrule{ }{\hastype{\Gamma}{\tmexs{T}}{\tyarr{(\tyarr{T}{\typrp})}{\typrp}}} \\
+        %
+        \inferrule{ }{\hastype{\Gamma}{\tmnabs{T}}{\tyarr{(\tyarr{T}{\typrp})}{\typrp}}}
     \end{gather*}
     If the proposition $\hastype{\Gamma}{t}{T}$ holds, we say that $t$ \emph{has type} $T$ in the \emph{context} $\Gamma$.
 \end{definition}
@@ -226,49 +240,103 @@ In a substitution $\subst{t}{m}{s_0, \dots, s_n}$, the resulting term and all th
 
 For example, $\hastype{\listdelim{\typrp}}{0}{\typrp}$ and $\hastype{\listdelim{\tyind}}{\top}{\typrp}$ and $\hastype{\listdelim{\tyind}}{\subst{0}{1}{\top}}{\typrp}$, that is, $\hastype{\listdelim{\tyind}}{\top}{\typrp}$.
 
+\begin{definition}
+    We define the substitution of the term $s$ with contexts $m$ and $n$ into the term $t$ as:
+    \[
+        \inddef{\substl{m}{n}{s}{t}}{\subst{t}{n}{0 \listsep \dots \listsep m-1 \listsep s}}
+    \]
+\end{definition}
+
 
 \subsection{Reduction}
 
-We define the $\beta$-reduction of a term recursively as follows:
+\begin{definition}
+    Given a binary relation on terms $R_m$, we define another relation $\step{R}{m}$ inductively as follows:
+    \begin{gather*}
+        \inferrule{R_m(a, b)}{\step{R}{m}{(a, b)}} \\
+        %
+        \inferrule{\step{R}{m}{(a, b)}}{\step{R}{m}{(\tmapp{a}{t}, \tmapp{b}{t})}} \qquad
+        %
+        \inferrule{\step{R}{m}{(a, b)}}{\step{R}{m}{(\tmapp{s}{a}, \tmapp{s}{b})}} \\
+        %
+        \inferrule{\step{R}{m+1}{(a, b)}}{\step{R}{m}{(\tmabs{T}{a}, \tmabs{T}{b})}}
+    \end{gather*}
+\end{definition}
+
+\begin{definition}
+    We define the binary relation $\betaconv{m}{}$ between terms inductively as follows:
+    \[
+        \inferrule{ }{\betaconv{m}{\bigl(\tmapp{(\tmabs{T}{t})}{s}, \substl{m}{m}{s}{t}\bigr)}}
+    \]
+\end{definition}
+
+\begin{definition}
+    We define the binary relation $\etaconv{m}{}$ between terms inductively as follows:
+    \[
+        \inferrule{ }{\etaconv{m}{(\tmabs{T}{\tmapp{t}{m}}, \decrbound{t})}} \infcondr{if $t$ does not contain $m$}
+    \]
+\end{definition}
+
+We define $\betastep{m}{}$ as $\step{\betaconv{m}{}}{}$ and $\etastep{m}{}$ as $\step{\etaconv{m}{}}{}$.
+
+
+%We define the $\beta$-reduction of a term recursively as follows:
+%\begin{gather*}
+%    \inddef{\betared{m}{(\tmapp{(\tmabs{T}{t})}{s})}}{\subst{\bigl(\betared{m+1}{t}\bigr)}{m}{0 \listsep \dots \listsep m - 1 \listsep \betared{m}{s}}} \\
+%    \inddef{\betared{m}{(\tmapp{s}{t})}}{\tmapp{\bigl(\betared{m}{s}\bigr)}{\bigl(\betared{m}{t}\bigr)}} \\
+%    \inddef{\betared{m}{(\tmabs{T}{t})}}{\tmabs{T}{\bigl(\betared{m+1}{t}\bigr)}} \\
+%    \inddef{\betared{m}{t}}{t}
+%\end{gather*}
+
+%We define the $\eta$-reduction of a term recursively as follows:
+%\begin{gather*}
+%    \inddef{\etared{m}{(\tmabs{T}{\tmapp{t}{m}})}}{\decrbound{t}} \infcondr{if $t$ does not contain $m$} \\
+%    \inddef{\etared{m}{(\tmapp{s}{t})}}{\tmapp{\bigl(\etared{m}{s})}{\bigl(\etared{m}{t})}} \\
+%    \inddef{\etared{m}{(\tmabs{T}{t})}}{\tmabs{T}{\bigl(\etared{m+1}{t}\bigr)}} \\
+%    \inddef{\etared{m}{t}}{t}
+%\end{gather*}
+%where $\decrbound{t}$ is the term obtained from $t$ by decreasing all of its bound levels by one, with respect to a context with $m$ free variables.
+
+%\begin{theorem}
+%    If $\hastype{\Gamma}{t}{T}$ then $\hastype{\Gamma}{\betared{\length{\Gamma}}{t}}{T}$.
+%\end{theorem}
+%
+%\begin{theorem}
+%    If $\hastype{\Gamma}{t}{T}$ then $\hastype{\Gamma}{\etared{\length{\Gamma}}{t}}{T}$.
+%\end{theorem}
+
+
+\subsection{Nominal constants}
+
+For every type $T$ let $\pi_T \colon \mathbb{N} \to \mathbb{N}$.
+The application of $\pi$ to a term is defined recursively as follows
 \begin{gather*}
-    \inddef{\betared{m}{(\tmapp{(\tmabs{T}{t})}{s})}}{\subst{\bigl(\betared{m+1}{t}\bigr)}{m}{0 \listsep \dots \listsep m - 1 \listsep \betared{m}{s}}} \\
-    \inddef{\betared{m}{(\tmapp{s}{t})}}{\tmapp{\bigl(\betared{m}{s}\bigr)}{\bigl(\betared{m}{t}\bigr)}} \\
-    \inddef{\betared{m}{(\tmabs{T}{t})}}{\tmabs{T}{\bigl(\betared{m+1}{t}\bigr)}} \\
-    \inddef{\betared{m}{t}}{t}
+    \inddef{\nommap{\pi}{\tmnom{T}{n}}}{\tmnom{T}{(\pi_T (n))}} \\
+    \inddef{\nommap{\pi}{(\tmabs{T}{t})}}{\tmabs{T}{(\nommap{\pi}{t})}} \\
+    \inddef{\nommap{\pi}{(\tmapp{s}{t})}}{\tmapp{(\nommap{\pi}{s})}{(\nommap{\pi}{t})}} \\
+    \inddef{\nommap{\pi}{t}}{t} \infcondr{in all other cases}
 \end{gather*}
 
-We define the $\eta$-reduction of a term recursively as follows:
-\begin{gather*}
-    \inddef{\etared{m}{(\tmabs{T}{\tmapp{t}{m}})}}{\decrbound{t}} \infcondr{if $t$ does not contain $m$} \\
-    \inddef{\etared{m}{(\tmapp{s}{t})}}{\tmapp{\bigl(\etared{m}{s})}{\bigl(\etared{m}{t})}} \\
-    \inddef{\etared{m}{(\tmabs{T}{t})}}{\tmabs{T}{\bigl(\etared{m+1}{t}\bigr)}} \\
-    \inddef{\etared{m}{t}}{t}
-\end{gather*}
-where $\decrbound{t}$ is the term obtained from $t$ by decreasing all of its bound levels by one, with respect to a context with $m$ free variables.
+We say that two terms $a, b$ are equivalent, written $a \approx b$, if there is a family of bijective functions $\pi_T$ such that $a$ is $\lambda$-equivalent to $\nommap{\pi}{b}$.
 
-\begin{theorem}
-    If $\hastype{\Gamma}{t}{T}$ then $\hastype{\Gamma}{\betared{\length{\Gamma}}{t}}{T}$.
-\end{theorem}
-
-\begin{theorem}
-    If $\hastype{\Gamma}{t}{T}$ then $\hastype{\Gamma}{\etared{\length{\Gamma}}{t}}{T}$.
-\end{theorem}
+We define the support of a term $t$, indicated as $\supp{t}$, as the set of nominal constants appearing in $t$.
 
 
 \section{G Logic}
 
-Given a list of types $\sigma$ and a term $t$, the expression $\judgement{\sigma}{t}$ is called a \emph{judgement}.
-Let $\Sigma$ be a list of types, $\Gamma$ a list of judgements and $B$ a judgement. The expression $\sequent{\Sigma}{\Gamma}{B}$ is called a \emph{sequent}.
-We denote the list constructed by appending a head element $B$ to a tail $\Gamma$ as $\listcons{B}{\Gamma}$.
-The concatenation of two lists $\Sigma$ and $\sigma$ is denoted by $\listapp{\Sigma}{\sigma}$.
+Let $\Sigma$ be a list of types, $\Gamma$ a set of terms and $B$ a term.
+The expression $\sequent{\Sigma}{\Gamma}{B}$ is called a \emph{sequent}.
+%We denote the list constructed by appending a head element $B$ to a tail $\Gamma$ as $\listcons{B}{\Gamma}$.
+%The concatenation of two lists $\Sigma$ and $\sigma$ is denoted by $\listapp{\Sigma}{\sigma}$.
 
 We define a calculus with the following inference rules:
 \begin{gather*}
     \inflab{
-        \hastype{\listapp{\Sigma}{\sigma}}{t}{\typrp}
+        \hastype{\Sigma}{B}{\typrp} \\
+        \tmequiv{B}{C}
     }{
-        \sequent{\Sigma}{\listdelim{\judgement{\sigma}{t}}}{\judgement{\sigma}{t}}
-    }{init} \qquad
+        \sequent{\Sigma}{B}{C}
+    }{id} \qquad
     %
     \inflab{
         \sequent{\Sigma}{\Delta}{B} \\
@@ -284,114 +352,156 @@ We define a calculus with the following inference rules:
     }{$cL$} \qquad
     %
     \inflab{
-        \hastype{\listapp{\Sigma}{\sigma}}{t}{\typrp} \\
+        \hastype{\Sigma}{B}{\typrp} \\
         \sequent{\Sigma}{\Gamma}{C}
     }{
-        \sequent{\Sigma}{\listcons{\judgement{\sigma}{t}}{\Gamma}}{C}
+        \sequent{\Sigma}{\listcons{B}{\Gamma}}{C}
     }{$wL$} \\
     %
     \inflab{
-        \hastype{\listapp{\Sigma}{\sigma}}{t}{\typrp}
+        \hastype{\Sigma}{C}{\typrp}
     }{
-        \sequent{\Sigma}{\listdelim{\judgement{\rho}{\bot}}}{\judgement{\sigma}{t}}
+        \sequent{\Sigma}{\bot}{C}
     }{$\bot L$} \qquad
     %
     \inflab{
     }{
-        \sequent{\Sigma}{\listempty}{\judgement{\sigma}{\top}}
+        \sequent{\Sigma}{\emptyset}{\top}
     }{$\top R$} \\
     %
     \inflab{
-        \hastype{\listapp{\Sigma}{\sigma}}{s}{\typrp} \\ \sequent{\Sigma}{\listcons{\judgement{\sigma}{t}}{\Gamma}}{B}
+        \sequent{\Sigma}{\listcons{B}{\Gamma}}{C} \\
+        \sequent{\Sigma}{\listcons{D}{\Gamma}}{C}
     }{
-        \sequent{\Sigma}{\listcons{\judgement{\sigma}{t \land s}}{\Gamma}}{B}
-    }{$\land L$} \qquad
-    %
-    \inflab{
-        \hastype{\listapp{\Sigma}{\sigma}}{t}{\typrp} \\ \sequent{\Sigma}{\listcons{\judgement{\sigma}{s}}{\Gamma}}{B}
-    }{
-        \sequent{\Sigma}{\listcons{\judgement{\sigma}{t \land s}}{\Gamma}}{B}
-    }{$\land L$} \\
-    %
-    \inflab{
-        \sequent{\Sigma}{\Gamma}{\judgement{\sigma}{s}} \\
-        \sequent{\Sigma}{\Gamma}{\judgement{\sigma}{t}}
-    }{
-        \sequent{\Sigma}{\Gamma}{\judgement{\sigma}{s \land t}}
-    }{$\land R$} \\
-    %
-    \inflab{
-        \sequent{\Sigma}{\listcons{\judgement{\sigma}{s}}{\Gamma}}{B} \\
-        \sequent{\Sigma}{\listcons{\judgement{\sigma}{t}}{\Gamma}}{B}
-    }{
-        \sequent{\Sigma}{\listcons{\judgement{\sigma}{s \lor t}}{\Gamma}}{B}
+        \sequent{\Sigma}{\listcons{B \lor D}{\Gamma}}{C}
     }{$\lor L$} \\
     %
     \inflab{
-        \hastype{\listapp{\Sigma}{\sigma}}{t}{\typrp} \\
-        \sequent{\Sigma}{\Gamma}{\judgement{\sigma}{s}}
+        \hastype{\Sigma}{C}{\typrp} \\
+        \sequent{\Sigma}{\Gamma}{B}
     }{
-        \sequent{\Sigma}{\Gamma}{\judgement{\sigma}{s \lor t}}
+        \sequent{\Sigma}{\Gamma}{B \lor C}
     }{$\lor R$} \qquad
     %
     \inflab{
-        \hastype{\listapp{\Sigma}{\sigma}}{s}{\typrp} \\
-        \sequent{\Sigma}{\Gamma}{\judgement{\sigma}{t}}
+        \hastype{\Sigma}{B}{\typrp} \\
+        \sequent{\Sigma}{\Gamma}{C}
     }{
-        \sequent{\Sigma}{\Gamma}{\judgement{\sigma}{s \lor t}}
+        \sequent{\Sigma}{\Gamma}{B \lor C}
     }{$\lor R$} \\
     %
     \inflab{
-        \sequent{\Sigma}{\Gamma}{\judgement{\sigma}{s}} \\
-        \sequent{\Sigma}{\listcons{\judgement{\sigma}{t}}{\Gamma}}{B}
+        \hastype{\Sigma}{D}{\typrp} \\
+        \sequent{\Sigma}{\listcons{B}{\Gamma}}{C}
     }{
-        \sequent{\Sigma}{\listcons{\judgement{\sigma}{\tmimp{s}{t}}}{\Gamma}}{B}
+        \sequent{\Sigma}{\listcons{B \land D}{\Gamma}}{C}
+    }{$\land L$} \qquad
+    %
+    \inflab{
+        \hastype{\Sigma}{B}{\typrp} \\
+        \sequent{\Sigma}{\listcons{D}{\Gamma}}{C}
+    }{
+        \sequent{\Sigma}{\listcons{B \land D}{\Gamma}}{C}
+    }{$\land L$} \\
+    %
+    \inflab{
+        \sequent{\Sigma}{\Gamma}{B} \\
+        \sequent{\Sigma}{\Gamma}{C}
+    }{
+        \sequent{\Sigma}{\Gamma}{B \land C}
+    }{$\land R$} \\
+    %
+    \inflab{
+        \sequent{\Sigma}{\Gamma}{B} \\
+        \sequent{\Sigma}{\listcons{D}{\Gamma}}{C}
+    }{
+        \sequent{\Sigma}{\listcons{\tmimp{B}{D}}{\Gamma}}{C}
     }{$\supset \! L$} \qquad
     %
     \inflab{
-        \sequent{\Sigma}{\listcons{\judgement{\sigma}{s}}{\Gamma}}{\judgement{\sigma}{t}}
+        \sequent{\Sigma}{\listcons{B}{\Gamma}}{C}
     }{
-        \sequent{\Sigma}{\Gamma}{\judgement{\sigma}{\tmimp{s}{t}}}
+        \sequent{\Sigma}{\Gamma}{\tmimp{B}{C}}
     }{$\supset \! R$} \\
     %
     \inflab{
-        \hastype{\listapp{\Sigma}{\sigma}}{t}{T} \\
-        \sequent{\Sigma}{\listcons{\judgement{\sigma}{\subst{s}{\length{\listapp{\Sigma}{\sigma}}}{0 \listsep 1 \listsep \dots \listsep \length{\listapp{\Sigma}{\sigma}}-1 \listsep t}}}{\Gamma}}{B}
+        \hastype{\Sigma}{t}{T} \\
+        \sequent{\Sigma}{\listcons{\substl{\length{\Sigma}}{\length{\Sigma}}{t}{B}}{\Gamma}}{C}
     }{
-        \sequent{\Sigma}{\listcons{(\judgement{\sigma}{\tmfor{T}{s}})}{\Gamma}}{B}
+        \sequent{\Sigma}{\listcons{\tmfor{T}{B}}{\Gamma}}{C}
     }{$\forall L$} \\
     %
     \inflab{
+        \setenum{\tmnom{T_1}{a_1}, \dots, \tmnom{T_n}{a_n}} = \supp{B} \\
         \sequent{
-            \listappel{\Sigma}{(\tyarr{T_{\length{\Sigma} + 1}}{\tyarr{\dots}{\tyarr{T_n}{S}}})}
-        }{\Gamma}{
-            \judgement{\listdelim{T_{\length{\Sigma} + 1} \listsep \dots \listsep T_n}}{s'}
+            \listappel{\Sigma}{(\tyarr{T_1}{\tyarr{\dots}{\tyarr{T_n}{T}}})}
+        }{\setcomp{\incrbound{x}}{x \in \Gamma}}{
+            \substl{\length{\Sigma}}{\length{\Sigma}+1}{\tmapp{\tmapp{\tmapp{\length{\Sigma}}{\tmnom{T_1}{a_1}}}{\dots}}{\tmnom{T_n}{a_n}}}{B}
         }
     }{
-        \sequent{\Sigma}{\Gamma}{\judgement{\listdelim{T_{\length{\Sigma} + 1} \listsep \dots \listsep T_n}}{\tmfor{S}{s}}}
+        \sequent{\Sigma}{\Gamma}{\tmfor{T}{B}}
     }{$\forall R$} \\
     %
     \inflab{
+        \setenum{\tmnom{T_1}{a_1}, \dots, \tmnom{T_n}{a_n}} = \supp{B} \\
         \sequent{
-            \listappel{\Sigma}{(\tyarr{T_{\length{\Sigma} + 1}}{\tyarr{\dots}{\tyarr{T_n}{S}}})}
+            \listappel{\Sigma}{(\tyarr{T_1}{\tyarr{\dots}{\tyarr{T_n}{T}}})}
         }{
-            \listcons{\judgement{\listdelim{T_{\length{\Sigma} + 1} \listsep \dots \listsep T_n}}{s'}}{\Gamma}
-        }{B}
+            \listcons{\substl{\length{\Sigma}}{\length{\Sigma}+1}{\tmapp{\tmapp{\tmapp{\length{\Sigma}}{\tmnom{T_1}{a_1}}}{\dots}}{\tmnom{T_n}{a_n}}}{B}}{\setcomp{\incrbound{x}}{x \in \Gamma}}
+        }{\incrbound{C}}
     }{
-        \sequent{\Sigma}{\listcons{(\judgement{\listdelim{T_{\length{\Sigma} + 1} \listsep \dots \listsep T_n}}{\tmex{S}{s}})}{\Gamma}}{B}
+        \sequent{\Sigma}{\listcons{\tmex{T}{B}}{\Gamma}}{C}
     }{$\exists L$} \\
     %
     \inflab{
-        \hastype{\listapp{\Sigma}{\sigma}}{t}{T} \\
-        \sequent{\Sigma}{\Gamma}{\judgement{\sigma}{\subst{s}{\length{\listapp{\Sigma}{\sigma}}}{0 \listsep 1 \listsep \dots \listsep \length{\listapp{\Sigma}{\sigma}}-1 \listsep t}}}
+        \hastype{\Sigma}{t}{T} \\
+        \sequent{\Sigma}{\Gamma}{\substl{\length{\Sigma}}{\length{\Sigma}}{t}{B}}
     }{
-        \sequent{\Sigma}{\Gamma}{\judgement{\sigma}{\tmex{T}{s}}}
+        \sequent{\Sigma}{\Gamma}{\tmex{T}{B}}
     }{$\exists R$} \\
+    %
+    \inflab{
+        \tmnom{T}{n} \notin \supp{B} \\
+        \sequent{\Sigma}{\listcons{\substl{\length{\Sigma}}{\length{\Sigma}}{\tmnom{T}{n}}{B}}{\Gamma}}{C}
+    }{
+        \sequent{\Sigma}{\listcons{\tmnab{T}{B}}{\Gamma}}{C}
+    }{$\nabla L$} \\
+    %
+    \inflab{
+        \tmnom{T}{n} \notin \supp{B} \\
+        \sequent{\Sigma}{\Gamma}{\substl{\length{\Sigma}}{\length{\Sigma}}{\tmnom{T}{n}}{B}}
+    }{
+        \sequent{\Sigma}{\Gamma}{\tmnab{T}{B}}
+    }{$\nabla R$}
 \end{gather*}
-where
+
+An example of $\forall R$:
 \[
-    s' = \subst{s}{n+1}{0 \listsep \dots \listsep \length{\Sigma}-1 \listsep \length{\Sigma}+1 \listsep \dots \listsep n \listsep \tmapp{\tmapp{\tmapp{\length{\Sigma}}{(\length{\Sigma}+1)}}{\dots}}{n}}
+    \inflab{
+        \sequent{
+            \listdelim{\typrp \listsep \tyarr{\tyind}{\tyarr{\tyind}{\typrp}}}
+        }{
+            \tmapp{\tmnom{\tyarr{\typrp}{\typrp}}{0}}{0}
+        }{
+            \tmapp{\tmapp{1}{\tmnom{\tyind}{0}}}{\tmnom{\tyind}{0}}
+        }
+    }{
+        \sequent{
+            \listdelim{\typrp}
+        }{
+            \tmapp{\tmnom{\tyarr{\typrp}{\typrp}}{0}}{0}
+        }{
+            \tmfor{\tyarr{\tyind}{\typrp}}{\tmapp{1}{\tmnom{\tyind}{0}}}
+        }
+    }{$\forall R$} \\
 \]
+
+In G, I should be able to prove:
+\[
+    \nabla_x \nabla_y (x \supset y)
+\]
+Which I cannot do without nominal constants.
+
 
 We want for every term that occurs inside a sequent to have type $\typrp$.
 We check that the all the rules enforce this, focusing on the non trivial ones only.
@@ -410,6 +520,9 @@ We check that the all the rules enforce this, focusing on the non trivial ones o
         \hastype{\listapp{\Sigma}{\sigma}}{\tmfor{T}{s}}{\typrp}
     }
 \]
+
+
+\subsection{Derivation examples}
 
 
 \printbibliography
