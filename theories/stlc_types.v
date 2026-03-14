@@ -28,6 +28,9 @@ Module Type TY.
      ty_rect P p a d (ty_arr A B) = a _ (ty_rect P p a d A) _ (ty_rect P p a d B).
   Axiom ty_rect_other : forall P p a d t,
     forall O : ty_other t, ty_rect P p a d t = d t O.
+
+  Parameter decision_ty_other :
+    forall A B, ty_other A -> ty_other B -> Decision (A = B).
 End TY.
 
 
@@ -56,8 +59,30 @@ Module TyTheories (Ty : TY).
   Tactic Notation "ty_simpl" "in" "*" := repeat (simpl in *; autorewrite with ty in *).
 
 
+  Instance ty_inhabited : Inhabited ty := populate ty_prp.
+
   Definition ty_rec (P : ty -> Set) := ty_rect P.
   Definition ty_ind (P : ty -> Prop) := ty_rect P.
+
+  Theorem ty_other_prp : ~ ty_other ty_prp.
+  Proof.
+    intros N.
+    set (f := ty_rect _ false (fun _ _ _ _ => false) (fun _ _ => true)).
+    assert (f ty_prp = f ty_prp); [reflexivity|].
+    subst f.
+    rewrite ty_rect_prp in H at 1.
+    rewrite ty_rect_other in H; easy.
+  Qed.
+
+  Theorem ty_other_arr A B : ~ ty_other (ty_arr A B).
+  Proof.
+    intros N.
+    set (f := ty_rect _ false (fun _ _ _ _ => false) (fun _ _ => true)).
+    assert (f (ty_arr A B) = f (ty_arr A B)); [reflexivity|].
+    subst f.
+    rewrite ty_rect_arr in H at 1.
+    rewrite ty_rect_other in H; easy.
+  Qed.
 
   Inductive tyv : Set :=
     | tyv_prp : tyv
@@ -70,11 +95,15 @@ Module TyTheories (Ty : TY).
       (fun _ fA _ fB => tyv_arr fA fB)
       (fun T _ => tyv_other T).
 
+  Theorem to_tyv_prp : to_tyv ty_prp = tyv_prp.
+  Proof. unfold to_tyv. now ty_simpl. Qed.
+
   Theorem to_tyv_arr A B :
     to_tyv (ty_arr A B) = tyv_arr (to_tyv A) (to_tyv B).
   Proof. unfold to_tyv. now ty_simpl. Qed.
 
-  Hint Rewrite to_tyv_arr : ty.
+  Hint Rewrite to_tyv_prp to_tyv_arr : ty.
+
 
   Fixpoint to_ty T : ty :=
     match T with
@@ -83,12 +112,12 @@ Module TyTheories (Ty : TY).
     | tyv_other T => T
     end.
 
-
   Theorem to_ty_to_tyv T : to_ty (to_tyv T) = T.
   Proof.
     induction T using ty_ind; ty_simpl; try congruence;
     unfold to_tyv; ty_simpl; congruence.
   Qed.
+
 
   Ltac to_tyv H := apply (f_equal to_tyv) in H; ty_simpl in H.
   Ltac to_ty H :=
@@ -97,33 +126,25 @@ Module TyTheories (Ty : TY).
     end.
   Tactic Notation "to_ty" := match goal with [H : _ |- _] => to_ty H end.
   Ltac ty_injection H := to_tyv H; injection H; intros; repeat to_ty; subst.
+  Ltac ty_discriminate H :=
+    match type of H with
+    | ty_other ty_prp => exfalso; now apply ty_other_prp
+    | ty_other (ty_arr ?A ?B) => exfalso; now apply (ty_other_arr A B)
+    | _ => to_tyv H; discriminate H
+    end.
+  Tactic Notation "ty_discriminate" ident(H) := ty_discriminate H.
+  Tactic Notation "ty_discriminate" :=
+    match goal with | [H : _ |- _] => ty_discriminate H end.
 
-  (*
-  Theorem to_tyv_arr A B : to_tyv (ty_arr A B) = tyv_arr (to_tyv A) (to_tyv B).
-  Proof. unfold to_tyv. now ty_simpl. Qed.
-
-  Hint Rewrite to_tyv_arr to_ty_to_tyv : ty.
-  *)
-
-
-  (*
-  Ltac tyv_f_equal H := apply (f_equal to_tyv) in H; ty_simpl1 H.
-  Ltac ty_injection H := tyv_f_equal H; injection H.
-  Ltac to_ty H := apply (f_equal to_ty) in H; ty_simpl1 H.
-  *)
-
-
-  (*
-  Theorem ty_arr_inj A B C D :
-    ty_arr A B = ty_arr C D -> A = C /\ B = D.
+  Instance ty_eq_decision : EqDecision ty.
   Proof.
-    intros H.
-    apply (f_equal to_tyv) in H. ty_simpl.
-    injection H. intros H1 H2.
-    apply (f_equal to_ty) in H1, H2. ty_simpl.
-    now split.
+    intros x. induction x using ty_rec; destruct y using ty_rec;
+      try (right; intros N; subst; ty_discriminate).
+    - now constructor.
+    - destruct (IHx1 y1), (IHx2 y2); subst; try (now left);
+        right; intros N; ty_injection N; contradiction.
+    - now apply decision_ty_other.
   Qed.
-  *)
 
 
   Definition context := rlist ty.

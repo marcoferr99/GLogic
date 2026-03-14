@@ -1,9 +1,7 @@
 Require Export stlc_types.
-From stdpp Require Import decidable.
+From stdpp Require Export relations.
 
-Import PeanoNat.
-Import Nat.
-Import Lia.
+Import Lia PeanoNat.Nat.
 
 
 (***********************************)
@@ -71,13 +69,13 @@ Module StlcTheories (Stlc : STLC).
   Create HintDb tm.
   Hint Rewrite tm_rect_lvl tm_rect_app tm_rect_abs : tm.
   Hint Rewrite tm_rect_other using assumption : tm.
-  Tactic Notation "tm_simpl" := repeat (simpl; autorewrite with tm).
+  Tactic Notation "tm_simpl" := repeat (autorewrite with tm; simpl).
   Tactic Notation "tm_simpl" "in" ident(H) := repeat (simpl in H; autorewrite with tm in H).
   Tactic Notation "tm_simpl" "in" "*" := repeat (simpl in *; autorewrite with tm in *).
   Ltac tm_induction t := induction t using tm_ind.
 
 
-  (** tm_other terms are distinct from the tm_lvl, tm_app and tm_abs *)
+  (** tm_other terms are distinct from tm_lvl, tm_app and tm_abs *)
 
   Theorem tm_other_lvl n : ~ tm_other (tm_lvl n).
   Proof.
@@ -92,7 +90,7 @@ Module StlcTheories (Stlc : STLC).
   Theorem tm_other_app s t : ~ tm_other (tm_app s t).
   Proof.
     intros N.
-    set (f := tm_rect _ (fun _ => false) (fun _ _ _ _ => true) (fun _ _ _ => false) (fun _ _ => false)).
+    set (f := tm_rect _ (fun _ => false) (fun _ _ _ _ => false) (fun _ _ _ => false) (fun _ _ => true)).
     assert (f (tm_app s t) = f (tm_app s t)); [reflexivity|].
     subst f.
     rewrite tm_rect_app in H at 1.
@@ -102,7 +100,7 @@ Module StlcTheories (Stlc : STLC).
   Theorem tm_other_abs T t : ~ tm_other (tm_abs T t).
   Proof.
     intros N.
-    set (f := tm_rect _ (fun _ => false) (fun _ _ _ _ => false) (fun _ _ _ => true) (fun _ _ => false)).
+    set (f := tm_rect _ (fun _ => false) (fun _ _ _ _ => false) (fun _ _ _ => false) (fun _ _ => true)).
     assert (f (tm_abs T t) = f (tm_abs T t)); [reflexivity|].
     subst f.
     rewrite tm_rect_abs in H at 1.
@@ -250,6 +248,35 @@ Module StlcTheories (Stlc : STLC).
   (**************************)
   (** ** Level manipulation *)
   (**************************)
+
+  Definition level_prop (P : nat -> Prop) t : Prop :=
+    (fix fx P t :=
+      match t with
+      | tmv_lvl m => P m
+      | tmv_abs T s => fx P s
+      | tmv_app s1 s2 => fx P s1 \/ fx P s2
+      | _ => False
+    end) P (to_tmv t).
+
+  Theorem level_prop_lvl P (n : nat) : level_prop P n <-> P n.
+  Proof. unfold level_prop. now tm_simpl. Qed.
+
+  Theorem level_prop_app P s t :
+    level_prop P (tm_app s t) <-> level_prop P s \/  level_prop P t.
+  Proof. unfold level_prop. tm_simpl. auto. Qed.
+
+  Theorem level_prop_abs P T t :
+    level_prop P (tm_abs T t) <-> level_prop P t.
+  Proof. unfold level_prop. now tm_simpl. Qed.
+
+  Theorem level_prop_other P t : tm_other t -> ~ level_prop P t.
+  Proof. intros. unfold level_prop. now tm_simpl. Qed.
+
+  Hint Rewrite level_prop_lvl level_prop_app level_prop_abs : tm.
+
+  Definition contains_bound_levels m n :=
+    level_prop (fun x => m <= x /\ x < (n + m)).
+
 
   (** Apply "f" to all variables in the term "t" *)
   Definition level_map (f : nat -> nat) (t : tm) : tm :=
@@ -408,6 +435,21 @@ Module StlcTheories (Stlc : STLC).
     intros. now rewrite decide_True.
   Qed.
 
+  Theorem bound_level_map_id m n t :
+    ~ contains_bound_levels m n t ->
+    bound_level_map (add n) m (bound_level_map (fun x => x - n) m t) = t.
+  Proof.
+    unfold bound_level_map, contains_bound_levels.
+    intros L. tm_induction t; tm_simpl in *.
+    - f_equal.
+      destruct (decide (m <= n0)), (decide (m <= n0 - n)); try lia.
+      destruct (decide (m <= n0)); lia.
+    - intuition congruence.
+    - intuition congruence.
+    - rewrite (level_map_other _ t0) by assumption.
+      now tm_simpl.
+  Qed.
+
 
   (********************)
   (** ** Substitution *)
@@ -439,8 +481,20 @@ Module StlcTheories (Stlc : STLC).
   Proof. intros. unfold subst. now tm_simpl. Qed.
 
   Hint Rewrite subst_lvl subst_app subst_abs : tm.
-  Hint Rewrite subst_other using assumption : tm.
+  Hint Rewrite subst_other using easy : tm.
 
+
+  Instance subst_Proper m : Proper ((≡) ==> (=) ==> (=)) (subst m).
+  Proof.
+    intros x y E ? t ->.
+    revert m x y E.
+    tm_induction t; intros m x y E; tm_simpl.
+    - unfold lookup_default. destruct E. rewrite H in *.
+      destruct (decide (n < y)); auto.
+    - now erewrite IHt1, IHt2.
+    - f_equal. apply IHt. now rewrite E.
+    - reflexivity.
+  Qed.
 
   Theorem has_type_subst1 C T R t r :
     rl_length r = rl_length R ->
@@ -511,6 +565,21 @@ Module StlcTheories (Stlc : STLC).
 
   Definition subst_last m n s := subst n (Build_rlist m tm_lvl +: s).
 
+  Notation "[ n ; m | s ] t" := (subst_last n m s t) (in custom stlc_tm at level 5) : stlc_scope.
+  Notation "[ n | s ] t" := (subst_last n n s t) (in custom stlc_tm at level 5) : stlc_scope.
+
+  Theorem subst_last_app m n s a b :
+    subst_last m n s (tm_app a b) =
+    tm_app (subst_last m n s a) (subst_last m n s b).
+  Proof. unfold subst_last. now tm_simpl. Qed.
+
+  Theorem subst_last_other m n s t : tm_other t -> subst_last m n s t = t.
+  Proof. intros. unfold subst_last. now tm_simpl. Qed.
+
+  Hint Rewrite subst_last_app : tm.
+  Hint Rewrite subst_last_other using easy : tm.
+
+
   Theorem has_type_subst_last1 (C D : context) T X s t :
     C <= D ->
     (forall n, n < C -> C n = D n) ->
@@ -522,6 +591,11 @@ Module StlcTheories (Stlc : STLC).
     rewrite E by assumption. tm_simpl. intuition lia.
   Qed.
 
+  Theorem has_type_subst_last_s1 (C : context) T X s t :
+    has_type C s T ->
+    has_type (C +: T) t X -> has_type C (subst_last C C s t) X.
+  Proof. intros. eapply has_type_subst_last1; eauto. Qed.
+
   Theorem has_type_subst_last2 (C D : context) T X s t :
     C <= D -> D <= S C ->
     (forall n, n < C -> C n = D n) ->
@@ -532,6 +606,12 @@ Module StlcTheories (Stlc : STLC).
     intros. simpl in *. destruct (decide (n < C)); try easy.
     rewrite HD by assumption. tm_simpl. intuition lia.
   Qed.
+
+  Theorem has_type_subst_last_s2 (C : context) T X s t :
+    has_type C s T ->
+    has_type C (subst_last C C s t) X ->
+    has_type (C +: T) t X.
+  Proof. intros. eapply has_type_subst_last2; eauto. Qed.
 
   (*
   Theorem has_type_subst_last C T X s t :
@@ -562,86 +642,60 @@ Module StlcTheories (Stlc : STLC).
   (** ** Reduction *)
   (*****************)
 
-  Definition level_prop P t : bool :=
-    (fix fx P t :=
-      match t with
-      | tmv_lvl m => P m
-      | tmv_abs T s => fx P s
-      | tmv_app s1 s2 => orb (fx P s1) (fx P s2)
-      | _ => false
-    end) P (to_tmv t).
+  Definition preserves_type (c : nat -> tm -> tm -> Prop) :=
+    forall (C : context) T a b, c C a b ->
+    has_type C a T -> has_type C b T.
 
-  Definition contains_bound_levels m n :=
-    level_prop (fun x => andb (leb m x) (ltb x (n + m))).
+  Inductive step c m : tm -> tm -> Prop :=
+    | step_conv a b : c m a b -> step c m a b
+    | step_appL a b t : step c m a b -> step c m (tm_app a t) (tm_app b t)
+    | step_appR s a b : step c m a b -> step c m (tm_app s a) (tm_app s b)
+    | step_abs T a b : step c (S m) a b -> step c m (tm_abs T a) (tm_abs T b).
 
-  Theorem bound_level_map_id m n t :
-    contains_bound_levels m n t = false ->
-    bound_level_map (add n) m (bound_level_map (fun x => x - n) m t) = t.
-  Proof.
-    unfold bound_level_map, contains_bound_levels, level_map, level_prop.
-    intros L. tm_induction t; tm_simpl in *; unfold tm_rec in *.
-    - f_equal.
-      destruct (decide (m <= n0)), (leb_spec m n0), (ltb_spec n0 (n + m));
-        try discriminate; try lia.
-      + destruct (decide (m <= n0 - n)); lia.
-      + destruct (decide (m <= n0)); lia.
-    - apply orb_false_elim in L. unfold tm_rec in *.
-      intuition congruence.
-    - intuition congruence.
-    - rewrite (to_tmv_other t0); [|assumption]. now tm_simpl.
-  Qed.
+  Definition reduces c m := rtc (step c m).
+  Definition conv_eq c m := rtsc (step c m).
 
-
-  Inductive beta_step m : tm -> tm -> Prop :=
-    | bs_subst T t s : beta_step m (tm_app (tm_abs T t) s) (subst_last m m s t)
-    | bs_appL a b t : beta_step m a b -> beta_step m (tm_app a t) (tm_app b t)
-    | bs_appR s a b : beta_step m a b -> beta_step m (tm_app s a) (tm_app s b)
-    | bs_abs T a b : beta_step (S m) a b -> beta_step m (tm_abs T a) (tm_abs T b).
-
-  Theorem has_type_beta_step (C : context) T a b :
-    beta_step C a b ->
+  Theorem has_type_step c (C : context) T a b :
+    preserves_type c -> step c C a b ->
     has_type C a T -> has_type C b T.
   Proof.
-    intros BS. remember (rl_length C) as l.
+    intros Hc BS. remember (rl_length C) as l.
     revert T. generalize dependent C.
-    induction BS; intros C Hl X H; tm_simpl in *.
-    - destruct H. subst.
-      eapply has_type_subst_last1; try eassumption; try easy.
-      tm_simpl in *. destruct H. now ty_injection H1.
-    - destruct H as [A]. exists A; auto.
-    - destruct H as [A]. exists A; auto.
-    - destruct H as [A]. exists A; [|easy].
+    induction BS; intros C Hl A HT; tm_simpl in *.
+    - subst. unfold preserves_type in *. eauto.
+    - destruct HT as [B]. exists B; auto.
+    - destruct HT as [B]. exists B; auto.
+    - destruct HT as [B]. exists B; [|easy].
       apply IHBS; simpl; congruence.
   Qed.
 
 
-  Inductive eta_step m : tm -> tm -> Prop :=
-    | es_f T t :
-        contains_bound_levels m 1 t = false ->
-        eta_step m (tm_abs T (tm_app t m)) (bound_level_map (fun x => x - 1) m t)
-    | es_appL a b t : eta_step m a b -> eta_step m (tm_app a t) (tm_app b t)
-    | es_appR s a b : eta_step m a b -> eta_step m (tm_app s a) (tm_app s b)
-    | es_abs T a b : eta_step (S m) a b -> eta_step m (tm_abs T a) (tm_abs T b).
+  Inductive beta_conv m : tm -> tm -> Prop :=
+    beta_conv_intro T t s :
+      beta_conv m (tm_app (tm_abs T t) s) (subst_last m m s t).
 
-  Theorem has_type_eta_step (C : context) T a b :
-    eta_step C a b ->
-    has_type C a T -> has_type C b T.
+  Theorem has_type_beta_conv : preserves_type beta_conv.
   Proof.
-    intros ES. remember (rl_length C) as l.
-    revert T. generalize dependent C.
-    induction ES; intros C Hl X HT; tm_simpl in *.
-    - destruct HT. subst.
-      apply (has_type_bound_level_map2 1 _ (C +: T)); try reflexivity.
-      + intros. simpl. now rewrite decide_True.
-      + rewrite bound_level_map_id; [|assumption].
-        tm_simpl in *. destruct H0.
-        tm_simpl in *. rewrite decide_False in H1 by lia.
-        destruct H1. congruence.
-    - destruct HT as [A]. exists A; auto.
-    - destruct HT as [A]. exists A; auto.
-    - destruct HT as [B]. exists B; [|easy].
-      apply IHES; [|assumption].
-      simpl. congruence.
+    unfold preserves_type. intros * HB **.
+    destruct HB. tm_simpl in *. destruct H. tm_simpl in *. destruct H.
+    ty_injection H1.
+    eapply has_type_subst_last1; try eassumption; try easy.
+  Qed.
+
+
+  Inductive eta_conv m : tm -> tm -> Prop :=
+    eta_conv_intro T t :
+        ~ contains_bound_levels m 1 t ->
+        eta_conv m (tm_abs T (tm_app t m)) (bound_level_map (fun x => x - 1) m t).
+
+  Theorem has_type_eta_conv : preserves_type eta_conv.
+  Proof.
+    unfold preserves_type. intros * HE **.
+    destruct HE. tm_simpl in *. destruct H. tm_simpl in *. destruct H.
+    subst. apply (has_type_bound_level_map2 1 _ (C +: T0)); try easy.
+    - intros. simpl. now rewrite decide_True.
+    - rewrite bound_level_map_id; try easy.
+      tm_simpl in *. rewrite decide_False in * by lia. intuition congruence.
   Qed.
 
 
@@ -824,19 +878,45 @@ Module StlcTheories (Stlc : STLC).
   *)
 
 
+  Definition lambda_equiv m :=
+    conv_eq (fun m a b => beta_conv m a b \/ eta_conv m a b) m.
+
+  (*
   Inductive lambda_equiv m : tm -> tm -> Prop :=
     | le_id t : lambda_equiv m t t
     | le_beta a b c :
-        lambda_equiv m a b -> beta_step m b c -> lambda_equiv m a c
+        lambda_equiv m a b -> step beta_conv m b c -> lambda_equiv m a c
     | le_eta a b c :
-        lambda_equiv m a b -> eta_step m b c -> lambda_equiv m a c.
+        lambda_equiv m a b -> step eta_conv m b c -> lambda_equiv m a c.
+
+  Theorem th {A} (R : relation A) a b :
+    Equivalence R -> rtsc R a b <-> R a b.
+  Proof.
+    intros E. split; intros H.
+    - unfold rtsc in H. remember (sc R) as scR.
+      induction H; subst.
+      + now destruct E.
+      + destruct H.
+        * destruct E. eauto.
+        * destruct E. eauto.
+    - now apply rtsc_lr.
+  Qed.
+
 
   Theorem has_type_lambda_equiv (C : context) T a b :
     lambda_equiv C a b ->
     has_type C a T -> has_type C b T.
   Proof.
-    intros LE HT. induction LE; try easy.
-    - eapply has_type_beta_step; eauto.
-    - eapply has_type_eta_step; eauto.
+    Search rtc.
+    intros LE HT.
+    induction LE; try easy.
+    - eapply has_type_step; eauto.
+      intros D A a b R Ha. destruct R.
+      + eapply has_type_beta_conv; eassumption.
+      + eapply has_type_eta_conv; eassumption.
+    -
+    - apply has_type_beta_conv.
+    - apply has_type_eta_conv.
   Qed.
+  *)
 End StlcTheories.

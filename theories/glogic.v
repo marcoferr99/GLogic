@@ -1,6 +1,5 @@
 Require Export g_stlc.
 From stdpp Require Import sets.
-Close Scope list_scope.
 
 
 (*************************)
@@ -21,106 +20,116 @@ Module Type SQ_SET.
     forall f s t, t ∈ sq_set_map f s <-> exists a, a ∈ s /\ t = f a.
 End SQ_SET.
 
+(*
 Notation "x :: X" := (X ∪ {[x]}) : stlc_scope.
+Notation "X :: x" := (X ∪ {[x]}) (in custom stlc_tm at level 60, left associativity) : stlc_scope.
+*)
 
 Module GLogic (SqSet : SQ_SET).
   Export SqSet.
   Export GStlcTheories.
 
+  (*
   Record sequent : Type := sq_build {
     sq_context : context;
     sq_premises : sq_set;
     sq_conclusion : tm
   }.
+  *)
 
-  Definition wf_sequent s :=
-    match s with
-    | sq_build C p j => has_type C j ty_prp /\ forall t, t ∈ p -> has_type C t ty_prp
-    end.
+  Definition wf_sequent C (p : sq_set) j :=
+    has_type C j ty_prp /\ forall t, t ∈ p -> has_type C t ty_prp.
 
-  (*Notation "|( sig ; l --> B )|" := (sq_build sig l B)
-    (sig custom stlc_ty, l custom stlc_ty, B custom stlc_ty).*)
-
-  Inductive is_derivable : sequent -> Prop :=
+  Inductive is_derivable : context -> sq_set -> tm -> Prop :=
+    | rl_set C l m c :
+        l ≡ m ->
+        is_derivable C l c ->
+        is_derivable C m c
     | rl_id C a b :
-        has_type C a ty_prp -> tm_equiv C a b ->
-        is_derivable (sq_build C {[a]} b)
-    | rl_cut C l m b c :
-        is_derivable (sq_build C l b) ->
-        is_derivable (sq_build C (b :: m) c) ->
-        is_derivable (sq_build C (l ∪ m) c)
-    | rl_cL C l b c :
-        is_derivable (sq_build C (b :: b :: l) c) ->
-        is_derivable (sq_build C (b :: l) c)
-    | rl_wL C l b a :
         has_type C a ty_prp ->
-        is_derivable (sq_build C l b) ->
-        is_derivable (sq_build C (a :: l) b)
+        has_type C b ty_prp ->
+        tm_equiv C a b ->
+        is_derivable C {[a]} b
+    | rl_cut C l m b c :
+        is_derivable C l b ->
+        is_derivable C (m ∪ {[b]}) c ->
+        is_derivable C (l ∪ m) c
+    | rl_cL C l b c :
+        is_derivable C (l ∪ {[b; b]}) c ->
+        is_derivable C (l ∪ {[b]}) c
+    | rl_wL C l m b :
+        (forall a, a ∈ l -> has_type C a ty_prp) ->
+        is_derivable C m b ->
+        is_derivable C (l ∪ m) b
     | rl_botL C c :
         has_type C c ty_prp ->
-        is_derivable (sq_build C {[gtm_bot]} c)
+        is_derivable C {[gtm_bot]} c
     | rl_topR C :
-        is_derivable (sq_build C ∅ gtm_top)
+        is_derivable C ∅ gtm_top
     | rl_orL C l b c d :
-        is_derivable (sq_build C (b :: l) c) ->
-        is_derivable (sq_build C (d :: l) c) ->
-        is_derivable (sq_build C (<{ b \/ d }> :: l) c)
+        is_derivable C (l ∪ {[b]}) c ->
+        is_derivable C (l ∪ {[d]}) c ->
+        is_derivable C (l ∪ {[ <{ b \/ d }> ]}) c
     | rl_orR1 C l b c :
         has_type C c ty_prp ->
-        is_derivable (sq_build C l b) ->
-        is_derivable (sq_build C l <{ b \/ c }>)
+        is_derivable C l b ->
+        is_derivable C l <{ b \/ c }>
     | rl_orR2 C l b c :
         has_type C b ty_prp ->
-        is_derivable (sq_build C l c) ->
-        is_derivable (sq_build C l <{ b \/ c }>)
+        is_derivable C l c ->
+        is_derivable C l <{ b \/ c }>
     | rl_andL1 C l b c d :
         has_type C d ty_prp ->
-        is_derivable (sq_build C (b :: l) c) ->
-        is_derivable (sq_build C (<{ b /\ d }> :: l) c)
+        is_derivable C (l ∪ {[b]}) c ->
+        is_derivable C (l ∪ {[ <{ b /\ d }> ]}) c
     | rl_andL2 C l b c d :
         has_type C b ty_prp ->
-        is_derivable (sq_build C (d :: l) c) ->
-        is_derivable (sq_build C (<{ b /\ d }> :: l) c)
+        is_derivable C (l ∪ {[d]}) c ->
+        is_derivable C (l ∪ {[ <{ b /\ d }> ]}) c
     | rl_andR C l b c :
-        is_derivable (sq_build C l b) ->
-        is_derivable (sq_build C l c) ->
-        is_derivable (sq_build C l <{ b /\ c }>)
+        is_derivable C l b ->
+        is_derivable C l c ->
+        is_derivable C l <{ b /\ c }>
     | rl_impL C l b c d :
-        is_derivable (sq_build C l b) ->
-        is_derivable (sq_build C (d :: l) c) ->
-        is_derivable (sq_build C (<{ b > d }> :: l) c)
+        is_derivable C l b ->
+        is_derivable C (l ∪ {[d]}) c ->
+        is_derivable C (l ∪ {[ <{ b > d }> ]}) c
     | rl_impR C l b c :
-        is_derivable (sq_build C (b :: l) c) ->
-        is_derivable (sq_build C l <{ b > c }>)
+        is_derivable C (l ∪ {[b]}) c ->
+        is_derivable C l <{ b > c }>
     | rl_forL C T l b c t :
         has_type C t T ->
-        is_derivable (sq_build C (subst_last C C t b :: l) c) ->
-        is_derivable (sq_build C (<{for T, b}> :: l) c)
+        is_derivable C (l ∪ {[ subst_last C C t b ]}) c ->
+        is_derivable C (l ∪ {[ <{for T, b}> ]}) c
     | rl_forR C T l b sb :
         (forall t, t ∈ sb <-> in_supp b t) ->
-        is_derivable (sq_build (C +: foldr ty_arr T (type_check_other <$> sb)) (sq_set_map (lift C) l) (
+        is_derivable (C +: foldr ty_arr T (type_check_other <$> sb)) (sq_set_map (lift C) l) (
           subst_last C (S C) (foldl tm_app (tm_lvl C) sb) b
-        )) ->
-        is_derivable (sq_build C l <{for T, b}>)
+        ) ->
+        is_derivable C l <{for T, b}>
     | rl_exL C T l b c sb :
         (forall t, t ∈ sb <-> in_supp b t) ->
-        is_derivable (sq_build (C +: foldr ty_arr T (type_check_other <$> sb)) ((
-          subst_last C (S C) (foldl tm_app (tm_lvl C) sb) b
-        ) :: (sq_set_map (lift C) l)) (lift C c)) ->
-        is_derivable (sq_build C (<{ex T, b}> :: l) c)
+        is_derivable (C +: foldr ty_arr T (type_check_other <$> sb)) (
+          sq_set_map (lift C) l ∪
+          {[subst_last C (S C) (foldl tm_app (tm_lvl C) sb) b]}
+        ) (lift C c) ->
+        is_derivable C (l ∪ {[ <{ex T, b}> ]}) c
     | rl_exR C T l b t :
         has_type C t T ->
-        is_derivable (sq_build C l (subst_last C C t b)) ->
-        is_derivable (sq_build C l <{ex T, b}>)
+        is_derivable C l (subst_last C C t b) ->
+        is_derivable C l <{ex T, b}>
     | rl_nabL C T l b c n :
         ~ in_supp b (gtm_nom T n) ->
-        is_derivable (sq_build C (subst_last C C (gtm_nom T n) b :: l) c) ->
-        is_derivable (sq_build C (<{nab T, b}> :: l) c)
+        is_derivable C (l ∪ {[ subst_last C C (gtm_nom T n) b ]}) c ->
+        is_derivable C (l ∪ {[ <{nab T, b}> ]}) c
     | rl_nabR C T l b n :
         ~ in_supp b (gtm_nom T n) ->
-        is_derivable (sq_build C l (subst_last C C (gtm_nom T n) b)) ->
-        is_derivable (sq_build C l (<{nab T, b}>))
+        is_derivable C l (subst_last C C (gtm_nom T n) b) ->
+        is_derivable C l (<{nab T, b}>)
   .
+
+  Notation "[{ sig ; l --> B }]" := (is_derivable sig l B)
+    (sig custom stlc_ty, l custom stlc_tm, B custom stlc_tm).
 
 
   Theorem has_type_fold C T h l t :
@@ -151,15 +160,15 @@ Module GLogic (SqSet : SQ_SET).
       + set_unfold. auto.
   Qed.
 
-  Theorem is_derivable_wf K : is_derivable K -> wf_sequent K.
+  Theorem is_derivable_wf C l c : is_derivable C l c -> wf_sequent C l c.
   Proof.
-    intros D. induction D; simpl in *.
-    - split.
-      + eapply has_type_tm_equiv; eassumption.
-      + intros. set_unfold. congruence.
+    intros D. unfold wf_sequent. induction D; simpl in *.
+    - set_unfold. intuition. apply H1. now apply H.
+    - split; try assumption.
+      intros. set_unfold. congruence.
     - set_unfold. intuition.
     - set_unfold. intuition.
-    - set_unfold. intuition. congruence.
+    - set_unfold. intuition.
     - set_unfold. intuition. subst. now constructor.
     - set_unfold. intuition. now constructor.
     - set_unfold. intuition. subst.
@@ -204,5 +213,88 @@ Module GLogic (SqSet : SQ_SET).
       tm_simpl. eexists; [|reflexivity].
       eapply has_type_subst_last2; eauto.
       now constructor.
+  Qed.
+
+
+
+  Notation "∅" := empty (in custom stlc_ty) : stlc_scope.
+  Notation "∅" := empty (in custom stlc_tm) : stlc_scope.
+  Notation "s +: x" := (s ∪ {[x]}) (in custom stlc_tm at level 50, left associativity) : stlc_scope.
+  Notation "∅" := empty : stdpp_scope.
+  Notation "{[ x ]}" := (singleton x) (in custom stlc_tm) : stlc_scope.
+
+  Theorem rl_nabL2 C T b l c :
+    exists2 n, ~ in_supp b (gtm_nom T n) &
+    (is_derivable C (l ∪ {[ subst_last C C (gtm_nom T n) b ]}) c ->
+    is_derivable C (l ∪ {[ <{nab T, b}> ]}) c).
+  Proof.
+    exists (nom_fresh b).
+    - apply nom_fresh_in_supp.
+    - intros. eapply rl_nabL.
+      + apply nom_fresh_in_supp.
+      + eassumption.
+  Qed.
+
+  Ltac rl_nabL n := edestruct rl_nabL2 as [n ?X ?H]; apply H; clear H.
+
+  Theorem sq_set_swap (l : sq_set) a b :
+    <{ l +: a +: b }> ≡ <{ l +: b +: a }>.
+  Proof. set_unfold. intuition. Qed.
+
+  Theorem union_empty (X : sq_set) : ∅ ∪ X ≡ X.
+  Proof. set_unfold. intuition. Qed.
+
+  Instance is_derivable_Proper : Proper ((=) ==> (≡) ==> (=) ==> iff) is_derivable.
+  Proof.
+    intros ? ** ? ** ? **. subst.
+    split; intros H; eapply rl_set; try apply H; easy.
+  Qed.
+
+  Theorem rl_bot2 C l c :
+    wf_sequent C l c -> [{ C ; l +: gtm_bot --> c }].
+  Proof.
+    intros W. destruct W. apply rl_wL; try easy.
+    now apply rl_botL.
+  Qed.
+
+  Theorem contrapositive C l b c :
+    [{ C ; l +: b --> c }] -> [{ C ; l +: ~ c --> ~ b }].
+  Proof.
+    intros H.
+    apply rl_impR. rewrite sq_set_swap.
+    apply rl_impL; try assumption.
+    apply rl_bot2. split.
+    - now constructor.
+    - apply is_derivable_wf in H. now destruct H.
+  Qed.
+
+  Theorem example1 T B :
+    has_type (∅ +: T) B ty_prp ->
+    [{ ∅ ; ∅ --> (∇ T, ~ B) ≡ ~ (∇ T, B) }].
+  Proof.
+    intros HT.
+    constructor; constructor.
+    - apply rl_nabL with (n := nom_fresh B).
+      {
+        unfold in_supp. simpl. intuition.
+        eapply nom_fresh_in_supp. eassumption.
+      }
+      tm_simpl. apply contrapositive.
+      apply rl_nabL with (n := nom_fresh B); [apply nom_fresh_in_supp|].
+      rewrite union_empty. apply rl_id.
+      + eapply has_type_subst_last_s1; [|eassumption]. now constructor.
+      + eapply has_type_subst_last_s1; [|eassumption]. now constructor.
+      + simpl. reflexivity.
+    - apply rl_nabR with (n := nom_fresh B).
+      {
+        unfold in_supp. simpl. intuition.
+        eapply nom_fresh_in_supp. eassumption.
+      }
+      tm_simpl. apply contrapositive.
+      apply rl_nabR with (n := nom_fresh B); [apply nom_fresh_in_supp|].
+      simpl. rewrite union_empty. apply rl_id.
+      + eapply has_type_subst_last_s1; [|eassumption]. now constructor.
+      + eapply has_type_subst_last_s1; [|eassumption]. now constructor.
+      + reflexivity.
   Qed.
 End GLogic.

@@ -41,6 +41,10 @@ Module TyChurch <: TY.
   Proof.
     intros. destruct t; simpl; destruct O. reflexivity.
   Qed.
+
+  Definition decision_ty_other A B :
+    ty_other A -> ty_other B -> Decision (A = B).
+  Proof. solve_decision. Qed.
 End TyChurch.
 
 
