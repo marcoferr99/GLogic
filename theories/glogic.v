@@ -47,11 +47,9 @@ Module GLogic (SqSet : SQ_SET).
         l ≡ m ->
         is_derivable C l c ->
         is_derivable C m c
-    | rl_id C a b :
-        has_type C a ty_prp ->
-        has_type C b ty_prp ->
+    | rl_id (C : context) l a b :
         tm_equiv C a b ->
-        is_derivable C {[a]} b
+        is_derivable C (l ∪ {[a]}) b
     | rl_cut C l m b c :
         is_derivable C l b ->
         is_derivable C (m ∪ {[b]}) c ->
@@ -59,33 +57,24 @@ Module GLogic (SqSet : SQ_SET).
     | rl_cL C l b c :
         is_derivable C (l ∪ {[b; b]}) c ->
         is_derivable C (l ∪ {[b]}) c
-    | rl_wL C l m b :
-        (forall a, a ∈ l -> has_type C a ty_prp) ->
-        is_derivable C m b ->
-        is_derivable C (l ∪ m) b
-    | rl_botL C c :
-        has_type C c ty_prp ->
-        is_derivable C {[gtm_bot]} c
-    | rl_topR C :
-        is_derivable C ∅ gtm_top
+    | rl_botL C l c :
+        is_derivable C (l ∪ {[gtm_bot]}) c
+    | rl_topR C l :
+        is_derivable C l gtm_top
     | rl_orL C l b c d :
         is_derivable C (l ∪ {[b]}) c ->
         is_derivable C (l ∪ {[d]}) c ->
         is_derivable C (l ∪ {[ <{ b \/ d }> ]}) c
     | rl_orR1 C l b c :
-        has_type C c ty_prp ->
         is_derivable C l b ->
         is_derivable C l <{ b \/ c }>
     | rl_orR2 C l b c :
-        has_type C b ty_prp ->
         is_derivable C l c ->
         is_derivable C l <{ b \/ c }>
     | rl_andL1 C l b c d :
-        has_type C d ty_prp ->
         is_derivable C (l ∪ {[b]}) c ->
         is_derivable C (l ∪ {[ <{ b /\ d }> ]}) c
     | rl_andL2 C l b c d :
-        has_type C b ty_prp ->
         is_derivable C (l ∪ {[d]}) c ->
         is_derivable C (l ∪ {[ <{ b /\ d }> ]}) c
     | rl_andR C l b c :
@@ -160,6 +149,7 @@ Module GLogic (SqSet : SQ_SET).
       + set_unfold. auto.
   Qed.
 
+  (*
   Theorem is_derivable_wf C l c : is_derivable C l c -> wf_sequent C l c.
   Proof.
     intros D. unfold wf_sequent. induction D; simpl in *.
@@ -214,6 +204,7 @@ Module GLogic (SqSet : SQ_SET).
       eapply has_type_subst_last2; eauto.
       now constructor.
   Qed.
+  *)
 
 
 
@@ -253,22 +244,13 @@ Module GLogic (SqSet : SQ_SET).
     split; intros H; eapply rl_set; try apply H; easy.
   Qed.
 
-  Theorem rl_bot2 C l c :
-    wf_sequent C l c -> [{ C ; l +: gtm_bot --> c }].
-  Proof.
-    intros W. destruct W. apply rl_wL; try easy.
-    now apply rl_botL.
-  Qed.
-
   Theorem contrapositive C l b c :
     [{ C ; l +: b --> c }] -> [{ C ; l +: ~ c --> ~ b }].
   Proof.
     intros H.
     apply rl_impR. rewrite sq_set_swap.
     apply rl_impL; try assumption.
-    apply rl_bot2. split.
-    - now constructor.
-    - apply is_derivable_wf in H. now destruct H.
+    apply rl_botL.
   Qed.
 
   Theorem in_supp_not B n :
@@ -277,41 +259,48 @@ Module GLogic (SqSet : SQ_SET).
 
   Hint Rewrite in_supp_not : tm.
 
-  Theorem rl_id2 C t :
-    has_type C t ty_prp -> is_derivable C {[t]} t.
+  Theorem rl_id2 C l t :
+    is_derivable C (l ∪ {[t]}) t.
   Proof. intros. apply rl_id; easy. Qed.
 
+  (*
   Notation "({ C ; l --> c })" := (wf_sequent C l c -> is_derivable C l c)
     (C custom stlc_ty, l custom stlc_tm, c custom stlc_tm) : stlc_scope.
+    *)
 
   Theorem example1 C l T B :
-    has_type (C +: T) B ty_prp ->
-    (forall x, x ∈ l -> has_type C x ty_prp) ->
     [{ C ; l --> (∇ T, ~ B) ≡ ~ (∇ T, B) }].
   Proof.
-    intros HB Hl. destruct (nom_in_supp B T) as [a Ha].
+    destruct (nom_in_supp B T) as [a Ha].
     constructor; constructor.
     - apply (rl_nabL a); tm_simpl; [easy|].
       apply contrapositive. apply (rl_nabL a Ha).
-      apply rl_wL; [assumption|]. apply rl_id2.
-      eapply has_type_subst_last_s1; [|eassumption]. now constructor.
+      apply rl_id2.
     - apply (rl_nabR a); tm_simpl; [easy|].
       apply contrapositive. apply (rl_nabR a Ha).
-      apply rl_wL; [assumption|]. apply rl_id2.
-      eapply has_type_subst_last_s1; [|eassumption]. now constructor.
+      apply rl_id2.
   Qed.
 
-  (*
   Theorem example2 C l T b c :
-    has_type (C +: T) b ty_prp ->
-    has_type (C +: T) c ty_prp ->
-    (forall x, x ∈ l -> has_type C x ty_prp) ->
     [{ C; l --> (∇ T, b \/ c) ≡ (∇ T, b) \/ (∇ T, c) }].
   Proof.
-    intros Hb Hc Hl. destruct (nom_in_supp <{ b \/ c }> T) as [n Hn].
+    destruct (nom_in_supp <{ b \/ c }> T) as [n Hn].
     constructor; constructor.
     - apply (rl_nabL n); [easy|].
       tm_simpl. apply rl_orL.
-      + apply rl_orR1.
-        *)
+      + apply rl_orR1. apply (rl_nabR n).
+        * unfold in_supp in *. simpl in *. intuition.
+        * apply rl_id2.
+      + apply rl_orR2. apply (rl_nabR n).
+        * unfold in_supp in *. simpl in *. intuition.
+        * apply rl_id2.
+    - apply (rl_nabR n); [easy|].
+      tm_simpl. apply rl_orL.
+      + apply rl_orR1. apply (rl_nabL n).
+        * unfold in_supp in *. simpl in *. intuition.
+        * apply rl_id2.
+      + apply rl_orR2. apply (rl_nabL n).
+        * unfold in_supp in *. simpl in *. intuition.
+        * apply rl_id2.
+  Qed.
 End GLogic.
