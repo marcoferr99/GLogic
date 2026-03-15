@@ -33,7 +33,9 @@ Module GLogic (SqSet : SQ_SET).
   Record sequent : Type := sq_build {
     sq_context : context;
     sq_premises : sq_set;
-    sq_conclusion : tm
+    sq_conclusion : tm;
+    _ : forall t, t ∈ sq_premises -> has_type sq_context t ty_prp;
+    _ : has_type sq_context sq_conclusion ty_prp
   }.
   *)
 

@@ -122,10 +122,10 @@ Module TyTheories (Ty : TY).
   Ltac to_tyv H := apply (f_equal to_tyv) in H; ty_simpl in H.
   Ltac to_ty H :=
     match type of H with
-    | to_tyv ?x = to_tyv ?y => apply (f_equal to_ty) in H; repeat rewrite to_ty_to_tyv in H
+    | to_tyv ?x = _ => apply (f_equal to_ty) in H; repeat rewrite to_ty_to_tyv in H
     end.
   Tactic Notation "to_ty" := match goal with [H : _ |- _] => to_ty H end.
-  Ltac ty_injection H := to_tyv H; injection H; intros; repeat to_ty; subst.
+  Ltac ty_injection H := to_tyv H; injection H; intros; repeat to_ty; subst; clear H.
   Ltac ty_discriminate H :=
     match type of H with
     | ty_other ty_prp => exfalso; now apply ty_other_prp
