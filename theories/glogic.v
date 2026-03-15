@@ -51,6 +51,7 @@ Module GLogic (SqSet : SQ_SET).
         tm_equiv C a b ->
         is_derivable C (l ∪ {[a]}) b
     | rl_cut C l m b c :
+        has_type C b ty_prp ->
         is_derivable C l b ->
         is_derivable C (m ∪ {[b]}) c ->
         is_derivable C (l ∪ m) c
@@ -121,6 +122,7 @@ Module GLogic (SqSet : SQ_SET).
     (sig custom stlc_ty, l custom stlc_tm, B custom stlc_tm) : stlc_scope.
 
 
+  (*
   Theorem has_type_fold C T h l t :
     Forall2 (fun x X => has_type C x X) l h ->
     has_type C t (foldr ty_arr T h) ->
@@ -149,7 +151,6 @@ Module GLogic (SqSet : SQ_SET).
       + set_unfold. auto.
   Qed.
 
-  (*
   Theorem is_derivable_wf C l c : is_derivable C l c -> wf_sequent C l c.
   Proof.
     intros D. unfold wf_sequent. induction D; simpl in *.
