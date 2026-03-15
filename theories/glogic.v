@@ -118,18 +118,16 @@ Module GLogic (SqSet : SQ_SET).
         has_type C t T ->
         is_derivable C l (subst_last C C t b) ->
         is_derivable C l <{ex T, b}>
-    | rl_nabL C T l b c n :
-        ~ in_supp b (gtm_nom T n) ->
+    | rl_nabL {T b} n (_ : ~ in_supp b (gtm_nom T n)) C l c :
         is_derivable C (l ∪ {[ subst_last C C (gtm_nom T n) b ]}) c ->
         is_derivable C (l ∪ {[ <{nab T, b}> ]}) c
-    | rl_nabR C T l b n :
-        ~ in_supp b (gtm_nom T n) ->
+    | rl_nabR {T b} n (_ : ~ in_supp b (gtm_nom T n)) C l :
         is_derivable C l (subst_last C C (gtm_nom T n) b) ->
         is_derivable C l (<{nab T, b}>)
   .
 
   Notation "[{ sig ; l --> B }]" := (is_derivable sig l B)
-    (sig custom stlc_ty, l custom stlc_tm, B custom stlc_tm).
+    (sig custom stlc_ty, l custom stlc_tm, B custom stlc_tm) : stlc_scope.
 
 
   Theorem has_type_fold C T h l t :
@@ -223,6 +221,9 @@ Module GLogic (SqSet : SQ_SET).
   Notation "∅" := empty : stdpp_scope.
   Notation "{[ x ]}" := (singleton x) (in custom stlc_tm) : stlc_scope.
 
+  Theorem nom_in_supp b T : exists a, ~ in_supp b (gtm_nom T a).
+  Proof. eexists. apply nom_fresh_in_supp. Qed.
+
   Theorem rl_nabL2 C T b l c :
     exists2 n, ~ in_supp b (gtm_nom T n) &
     (is_derivable C (l ∪ {[ subst_last C C (gtm_nom T n) b ]}) c ->
@@ -268,33 +269,47 @@ Module GLogic (SqSet : SQ_SET).
     - apply is_derivable_wf in H. now destruct H.
   Qed.
 
-  Theorem example1 T B :
-    has_type (∅ +: T) B ty_prp ->
-    [{ ∅ ; ∅ --> (∇ T, ~ B) ≡ ~ (∇ T, B) }].
+  Theorem in_supp_not B n :
+    in_supp <{ ~ B }> n <-> in_supp B n.
+  Proof. unfold in_supp. simpl. intuition. Qed.
+
+  Hint Rewrite in_supp_not : tm.
+
+  Theorem rl_id2 C t :
+    has_type C t ty_prp -> is_derivable C {[t]} t.
+  Proof. intros. apply rl_id; easy. Qed.
+
+  Notation "({ C ; l --> c })" := (wf_sequent C l c -> is_derivable C l c)
+    (C custom stlc_ty, l custom stlc_tm, c custom stlc_tm) : stlc_scope.
+
+  Theorem example1 C l T B :
+    has_type (C +: T) B ty_prp ->
+    (forall x, x ∈ l -> has_type C x ty_prp) ->
+    [{ C ; l --> (∇ T, ~ B) ≡ ~ (∇ T, B) }].
   Proof.
-    intros HT.
+    intros HB Hl. destruct (nom_in_supp B T) as [a Ha].
     constructor; constructor.
-    - apply rl_nabL with (n := nom_fresh B).
-      {
-        unfold in_supp. simpl. intuition.
-        eapply nom_fresh_in_supp. eassumption.
-      }
-      tm_simpl. apply contrapositive.
-      apply rl_nabL with (n := nom_fresh B); [apply nom_fresh_in_supp|].
-      rewrite union_empty. apply rl_id.
-      + eapply has_type_subst_last_s1; [|eassumption]. now constructor.
-      + eapply has_type_subst_last_s1; [|eassumption]. now constructor.
-      + simpl. reflexivity.
-    - apply rl_nabR with (n := nom_fresh B).
-      {
-        unfold in_supp. simpl. intuition.
-        eapply nom_fresh_in_supp. eassumption.
-      }
-      tm_simpl. apply contrapositive.
-      apply rl_nabR with (n := nom_fresh B); [apply nom_fresh_in_supp|].
-      simpl. rewrite union_empty. apply rl_id.
-      + eapply has_type_subst_last_s1; [|eassumption]. now constructor.
-      + eapply has_type_subst_last_s1; [|eassumption]. now constructor.
-      + reflexivity.
+    - apply (rl_nabL a); tm_simpl; [easy|].
+      apply contrapositive. apply (rl_nabL a Ha).
+      apply rl_wL; [assumption|]. apply rl_id2.
+      eapply has_type_subst_last_s1; [|eassumption]. now constructor.
+    - apply (rl_nabR a); tm_simpl; [easy|].
+      apply contrapositive. apply (rl_nabR a Ha).
+      apply rl_wL; [assumption|]. apply rl_id2.
+      eapply has_type_subst_last_s1; [|eassumption]. now constructor.
   Qed.
+
+  (*
+  Theorem example2 C l T b c :
+    has_type (C +: T) b ty_prp ->
+    has_type (C +: T) c ty_prp ->
+    (forall x, x ∈ l -> has_type C x ty_prp) ->
+    [{ C; l --> (∇ T, b \/ c) ≡ (∇ T, b) \/ (∇ T, c) }].
+  Proof.
+    intros Hb Hc Hl. destruct (nom_in_supp <{ b \/ c }> T) as [n Hn].
+    constructor; constructor.
+    - apply (rl_nabL n); [easy|].
+      tm_simpl. apply rl_orL.
+      + apply rl_orR1.
+        *)
 End GLogic.

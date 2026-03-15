@@ -102,7 +102,7 @@ Module GStlcTheories.
   Notation "∇ T , t" := (tm_app (gtm_nab T) (tm_abs T t))
     (in custom stlc_tm at level 200, T custom stlc_ty,
       t custom stlc_tm at level 200, left associativity) : stlc_scope.
-  Notation "B ≡ C" := (<{(B > C) /\ (C > B)}>) (in custom stlc_tm at level 1) : stlc_scope.
+  Notation "B ≡ C" := (<{(B > C) /\ (C > B)}>) (in custom stlc_tm at level 80) : stlc_scope.
   Notation "~ B" := <{ B > gtm_bot }> (in custom stlc_tm at level 75) : stlc_scope.
 
 
@@ -241,6 +241,14 @@ Module GStlcTheories.
   (** *** Support *)
 
   Definition in_supp t n := nom_prop (fun T x => n = gtm_nom T x) t.
+
+  (*
+  Theorem in_supp_app a b n :
+    in_supp (tm_app a b) n <-> in_supp a n \/ in_supp b n.
+  Proof. reflexivity. Qed.
+
+  Hint Rewrite in_supp_app : tm.
+  *)
 
   Theorem in_supp_other t n : in_supp t n -> tm_other n.
   Proof.
