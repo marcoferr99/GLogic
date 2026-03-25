@@ -126,10 +126,10 @@ Module GStlcTheories.
     | x => x
     end.
 
-  Instance pointwise2_Equiv A B C : Equiv (A -> B -> C) :=
+  Definition pointwise2_Equiv {A B C} : Equiv (A -> B -> C) :=
     fun f g => forall x y, f x y = g x y.
 
-  Theorem nom_map_Proper : Proper ((≡) ==> (=) ==> (=)) nom_map.
+  Theorem nom_map_Proper : Proper (pointwise2_Equiv ==> (=) ==> (=)) nom_map.
   Proof.
     intros f g E ? t ->. induction t; simpl; try easy; congruence.
   Qed.

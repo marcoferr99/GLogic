@@ -244,6 +244,47 @@ Module StlcTheories (Stlc : STLC).
     - subst. f_equal. eauto.
   Qed.
 
+  Theorem has_type_app_inv C s t A B :
+    has_type C (tm_app s t) B ->
+    has_type C s (ty_arr A B) ->
+    has_type C t A.
+  Proof.
+    intros Hst Hs. apply has_type_app in Hst as [X Hx1 Hx2].
+    generalize (has_type_unique _ _ _ _ Hs Hx1). intros E.
+    now ty_injection E.
+  Qed.
+
+  Theorem has_type_app_inv2 C A B D s t u :
+    has_type C (tm_app (tm_app s t) u) D ->
+    has_type C s -[ A -> B -> D ]- ->
+    has_type C t A /\ has_type C u B.
+  Proof.
+    intros H Hs. apply has_type_app in H as [X HX1 HX2].
+    apply has_type_app in HX1 as [Y HY1 HY2].
+    generalize (has_type_unique _ _ _ _ Hs HY1). intros E.
+    now ty_injection E.
+  Qed.
+
+  Theorem has_type_app_inv2_l C A B D s t u :
+    has_type C (tm_app (tm_app s t) u) D ->
+    has_type C s -[ A -> B -> D ]- ->
+    has_type C t A.
+  Proof. apply has_type_app_inv2. Qed.
+
+  Theorem has_type_app_inv2_r C A B D s t u :
+    has_type C (tm_app (tm_app s t) u) D ->
+    has_type C s -[ A -> B -> D ]- ->
+    has_type C u B.
+  Proof. apply has_type_app_inv2. Qed.
+
+  Theorem has_type_abs_inv C T A B t :
+    has_type C (tm_abs T t) -[ A -> B ]- ->
+    has_type (C +: T) t B.
+  Proof.
+    intros H. apply has_type_abs in H as [X HX1 HX2].
+    now ty_injection HX2.
+  Qed.
+
 
   (**************************)
   (** ** Level manipulation *)
