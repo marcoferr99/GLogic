@@ -80,31 +80,28 @@ Module StlcTheories (Stlc : STLC).
   Theorem tm_other_lvl n : ~ tm_other (tm_lvl n).
   Proof.
     intros N.
-    set (f := tm_rect _ (fun _ => false) (fun _ _ _ _ => false) (fun _ _ _ => false) (fun _ _ => true)).
-    assert (f n = f n); [reflexivity|].
-    subst f.
-    rewrite tm_rect_lvl in H at 1.
-    rewrite tm_rect_other in H; easy.
+    set (f := tm_rect _ (fun _ => false) (fun _ _ _ _ => false)
+      (fun _ _ _ => false) (fun _ _ => true)).
+    assert (E : f n = f n) by reflexivity. subst f.
+    rewrite tm_rect_lvl in E at 1. now rewrite tm_rect_other in E.
   Qed.
 
   Theorem tm_other_app s t : ~ tm_other (tm_app s t).
   Proof.
     intros N.
-    set (f := tm_rect _ (fun _ => false) (fun _ _ _ _ => false) (fun _ _ _ => false) (fun _ _ => true)).
-    assert (f (tm_app s t) = f (tm_app s t)); [reflexivity|].
-    subst f.
-    rewrite tm_rect_app in H at 1.
-    rewrite tm_rect_other in H; easy.
+    set (f := tm_rect _ (fun _ => false) (fun _ _ _ _ => false)
+      (fun _ _ _ => false) (fun _ _ => true)).
+    assert (E : f (tm_app s t) = f (tm_app s t)) by reflexivity. subst f.
+    rewrite tm_rect_app in E at 1. now rewrite tm_rect_other in E.
   Qed.
 
   Theorem tm_other_abs T t : ~ tm_other (tm_abs T t).
   Proof.
     intros N.
-    set (f := tm_rect _ (fun _ => false) (fun _ _ _ _ => false) (fun _ _ _ => false) (fun _ _ => true)).
-    assert (f (tm_abs T t) = f (tm_abs T t)); [reflexivity|].
-    subst f.
-    rewrite tm_rect_abs in H at 1.
-    rewrite tm_rect_other in H; easy.
+    set (f := tm_rect _ (fun _ => false) (fun _ _ _ _ => false)
+      (fun _ _ _ => false) (fun _ _ => true)).
+    assert (E : f (tm_abs T t) = f (tm_abs T t)) by reflexivity. subst f.
+    rewrite tm_rect_abs in E at 1. now rewrite tm_rect_other in E.
   Qed.
 
 
@@ -195,18 +192,18 @@ Module StlcTheories (Stlc : STLC).
   Theorem has_type_lvl : forall c n T,
     has_type c (tm_lvl n) T <-> n < c /\ c n = T.
   Proof.
-    split; intros.
+    split; intros H.
     - inversion H; try tm_discriminate; subst.
-      tm_injection H0. split; congruence.
+      now tm_injection H0.
     - destruct H. subst. now constructor.
   Qed.
 
   Theorem has_type_app : forall c s t B,
     has_type c (tm_app s t) B <->
-    exists2 A, has_type c s (ty_arr A B) &  has_type c t A.
+    exists2 A, has_type c s (ty_arr A B) & has_type c t A.
   Proof.
-    split; intros.
-    - inversion H; subst; try tm_discriminate.
+    split; intros H.
+    - inversion H; try tm_discriminate; subst.
       tm_injection H0. now exists A.
     - destruct H. econstructor; eauto.
   Qed.
@@ -215,75 +212,66 @@ Module StlcTheories (Stlc : STLC).
     has_type c (tm_abs A t) T <->
     exists2 B, has_type (c +: A) t B & T = -[ A -> B ]-.
   Proof.
-    split; intros.
+    split; intros H.
     - inversion H; subst; try tm_discriminate.
       tm_injection H0. now exists B.
     - destruct H. subst. now constructor.
   Qed.
 
-  Theorem has_type_other c t T :
-    tm_other t ->
-    has_type c t T <-> type_check_other t = T.
+  Theorem has_type_abs2 C A B T t :
+    has_type C (tm_abs T t) -[ A -> B ]- ->
+    has_type (C +: A) t B.
   Proof.
-    split; intros.
-    - inversion H0; subst; try tm_discriminate. reflexivity.
+    intros H. apply has_type_abs in H as [].
+    now ty_injection H0.
+  Qed.
+
+  Theorem has_type_other {t T} C :
+    tm_other t ->
+    has_type C t T <-> T = type_check_other t.
+  Proof.
+    intros O. split; intros H.
+    - inversion H; subst; try tm_discriminate. reflexivity.
     - subst. now constructor.
   Qed.
 
+  Theorem has_type_other1 c t T :
+    tm_other t -> has_type c t T ->
+    T = type_check_other t.
+  Proof. apply has_type_other. Qed.
+
   Hint Rewrite has_type_lvl has_type_app has_type_abs : tm.
-  Hint Rewrite has_type_other using assumption : tm.
+  Hint Rewrite @has_type_other using assumption : tm.
 
 
-  Theorem has_type_unique c t A B :
-    has_type c t A -> has_type c t B -> A = B.
+  Theorem has_type_unique {A B} C t :
+    has_type C t A -> has_type C t B -> A = B.
   Proof.
-    revert B A c.
-    tm_induction t; intros c A B HA HB; tm_simpl in *;
+    revert B A C.
+    tm_induction t; intros C A B HA HB; tm_simpl in *;
       (try intuition congruence); destruct HA, HB.
     - eapply IHt1 in H; [|eassumption]. now ty_injection H.
     - subst. f_equal. eauto.
   Qed.
 
-  Theorem has_type_app_inv C s t A B :
-    has_type C (tm_app s t) B ->
-    has_type C s (ty_arr A B) ->
-    has_type C t A.
-  Proof.
-    intros Hst Hs. apply has_type_app in Hst as [X Hx1 Hx2].
-    generalize (has_type_unique _ _ _ _ Hs Hx1). intros E.
-    now ty_injection E.
-  Qed.
+  Ltac has_type_unique :=
+    match goal with
+      [H1 : has_type ?C ?t ?T1, H2 : has_type ?C ?t ?T2 |- _] => generalize (has_type_unique _ _ H1 H2); let x := fresh "H" in intros x; ty_injection x
+    end.
 
-  Theorem has_type_app_inv2 C A B D s t u :
-    has_type C (tm_app (tm_app s t) u) D ->
-    has_type C s -[ A -> B -> D ]- ->
-    has_type C t A /\ has_type C u B.
-  Proof.
-    intros H Hs. apply has_type_app in H as [X HX1 HX2].
-    apply has_type_app in HX1 as [Y HY1 HY2].
-    generalize (has_type_unique _ _ _ _ Hs HY1). intros E.
-    now ty_injection E.
-  Qed.
+  Ltac has_type_other :=
+    match goal with
+      [H : has_type ?C ?t ?T |- _] => apply has_type_other in H; [|reflexivity]; ty_injection H
+    end.
 
-  Theorem has_type_app_inv2_l C A B D s t u :
-    has_type C (tm_app (tm_app s t) u) D ->
-    has_type C s -[ A -> B -> D ]- ->
-    has_type C t A.
-  Proof. apply has_type_app_inv2. Qed.
+  Tactic Notation "has_type" "in" ident(H) :=
+    match type of H with
+    | has_type _ (tm_app _ _) _ => apply has_type_app in H as []; try has_type_unique; try has_type_other
+    | has_type _ (tm_abs _ _) _ => apply has_type_abs2 in H
+    end; ty_simpl in H.
 
-  Theorem has_type_app_inv2_r C A B D s t u :
-    has_type C (tm_app (tm_app s t) u) D ->
-    has_type C s -[ A -> B -> D ]- ->
-    has_type C u B.
-  Proof. apply has_type_app_inv2. Qed.
-
-  Theorem has_type_abs_inv C T A B t :
-    has_type C (tm_abs T t) -[ A -> B ]- ->
-    has_type (C +: T) t B.
-  Proof.
-    intros H. apply has_type_abs in H as [X HX1 HX2].
-    now ty_injection HX2.
-  Qed.
+  Tactic Notation "has_type" :=
+    repeat match goal with [H : has_type ?C ?t ?T |- _] => has_type in H end.
 
 
   (**************************)

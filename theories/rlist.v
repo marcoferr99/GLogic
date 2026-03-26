@@ -42,27 +42,24 @@ Instance rlist_equiv_Equivalence A : Equivalence (@rlist_equiv A).
 Proof.
   constructor; intros x.
   - now constructor.
-  - intros y H. destruct H.
-    constructor; [easy|].
-    intros. symmetry. apply H0. congruence.
-  - intros y z Hx Hz. destruct Hx, Hz.
+  - intros y [H1 H2]. constructor; [easy|].
+    symmetry. apply H2. congruence.
+  - intros y z [Hx1 Hx2] [Hy1 Hy2].
     constructor; [congruence|].
-    intros. rewrite H0; [rewrite H2|]; congruence.
+    intros. rewrite Hx2 by easy. rewrite Hy2; congruence.
 Qed.
 
 Instance rl_length_Proper {A} : Proper ((≡) ==> (=)) (@rl_length A).
-Proof. intros x y E. now destruct E. Qed.
+Proof. now intros ? ? []. Qed.
 
 Instance rlist_fmap_Proper {A B} : Proper ((=) ==> (≡) ==> (≡)) (rlist_fmap A B).
 Proof.
-  intros ? f -> x y E. destruct E. constructor.
-  - now simpl.
-  - intros. simpl in *. now rewrite H0.
+  intros ? f -> x y [? H]. constructor; [easy|].
+  intros. simpl in *. now rewrite H.
 Qed.
 
 Instance rl_cons_Proper {A} : Proper ((≡) ==> (=) ==> (≡)) (@rl_cons A).
 Proof.
-  intros x y E ? a ->. destruct E. constructor.
-  - simpl. congruence.
-  - intros. simpl in *. rewrite H in *. destruct (decide (n < y)); auto.
+  intros ? ? [H ?] ? ? ->. constructor; simpl; [congruence|].
+  intros. rewrite H in *. destruct (decide (n < y)); auto.
 Qed.

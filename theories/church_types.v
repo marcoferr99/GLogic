@@ -3,7 +3,7 @@ Require Export stlc_types.
 
 (** * Church Implementation *)
 
-Module TyChurch <: TY.
+Module TyChurch : TY.
   Inductive tyc : Set :=
     | tyc_prp : tyc
     | tyc_arr : tyc -> tyc -> tyc
@@ -42,12 +42,13 @@ Module TyChurch <: TY.
     intros. destruct t; simpl; destruct O. reflexivity.
   Qed.
 
-  Definition decision_ty_other A B :
+  Definition ty_eq_dec_other A B :
     ty_other A -> ty_other B -> Decision (A = B).
   Proof. solve_decision. Qed.
 End TyChurch.
 
 
+(*
 Module TyChurchTheories.
   Module TyTheories := TyTheories TyChurch.
   Import TyTheories.
@@ -60,3 +61,4 @@ Module TyChurchTheories.
   Check -[ o -> (i -> o) ]-.
   Check -[ (o -> i) -> o ]-.
 End TyChurchTheories.
+*)

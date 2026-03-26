@@ -403,134 +403,74 @@ Module GLogic (SqSet : SQ_SET).
   Theorem is_derivable_is_derivable_wf C l c :
     wf_sequent C l c ->  [{ C; l --> c }] -> is_derivable_wf C l c.
   Proof.
-    intros W D. unfold wf_sequent, wf_sq_set in W. induction D.
+    intros [] D. unfold wf_sq_set in *. induction D; set_unfold.
     - eapply wrl_set; [eassumption|].
-      apply IHD. set_solver.
-    - destruct W. unfold wf_sq_set in *. set_unfold.
-      apply wrl_wL; try auto.
+      apply IHD; set_solver.
+    - apply wrl_wL; try auto.
       apply wrl_id; auto.
-    - eapply wrl_cut.
-      + apply IHD1. unfold wf_sequent, wf_sq_set in *.
-        set_solver.
-      + apply IHD2. unfold wf_sequent, wf_sq_set in *.
-        set_solver.
-    - apply wrl_cL. apply IHD.
-      unfold wf_sequent, wf_sq_set in *. set_solver.
-    - unfold wf_sequent, wf_sq_set in *.
-      apply wrl_wL; [|apply wrl_botL]; set_solver.
-    - unfold wf_sequent, wf_sq_set in *.
-      assert (l ≡ l ∪ ∅); [set_solver|].
-      rewrite H. apply wrl_wL; [|apply wrl_topR].
-      clear H. set_solver.
-    - apply wrl_orL.
-      + apply IHD1. intuition. set_unfold. destruct H3; intuition.
-        subst. eapply has_type_app_inv2_l.
-        * apply H. now right.
-        * now apply ht_other2.
-      + apply IHD2. set_unfold. intuition. subst.
-        eapply has_type_app_inv2_r.
-        * apply H. now right.
-        * now apply ht_other2.
-    - destruct W as [W1 W2]. apply wrl_orR1.
-      + eapply has_type_app_inv2_r; [apply W2|].
-        now apply ht_other2.
-      + apply IHD. intuition.
-        eapply has_type_app_inv2_l; [apply W2|].
-        now apply ht_other2.
-    - destruct W as [W1 W2]. apply wrl_orR2.
-      + eapply has_type_app_inv2_l; [apply W2|].
-        now apply ht_other2.
-      + apply IHD. intuition.
-        eapply has_type_app_inv2_r; [apply W2|].
-        now apply ht_other2.
-    - destruct W as [W1 W2]. set_unfold. apply wrl_andL1.
-      + eapply has_type_app_inv2_r.
-        * apply W1. now right.
-        * now apply ht_other2.
-      + apply IHD. intuition. subst.
-        eapply has_type_app_inv2_l.
-        * apply W1. now right.
-        * now apply ht_other2.
-    - destruct W as [W1 W2]. set_unfold. apply wrl_andL2.
-      + eapply has_type_app_inv2_l.
-        * apply W1. now right.
-        * now apply ht_other2.
-      + apply IHD. intuition. subst.
-        eapply has_type_app_inv2_r.
-        * apply W1. now right.
-        * now apply ht_other2.
-    - destruct W as [W1 W2]. apply wrl_andR.
-      + apply IHD1. intuition.
-        eapply has_type_app_inv2_l; [apply W2|].
-        now apply ht_other2.
-      + apply IHD2. intuition.
-        eapply has_type_app_inv2_r; [apply W2|].
-        now apply ht_other2.
-    - destruct W as [W1 W2]. set_unfold. apply wrl_impL.
-      + apply IHD1. intuition.
-        eapply has_type_app_inv2_l.
-        * apply W1. now right.
-        * now apply ht_other2.
-      + apply IHD2. intuition. subst.
-        eapply has_type_app_inv2_r.
-        * apply W1. now right.
-        * now apply ht_other2.
-    - destruct W as [W1 W2]. set_unfold. apply wrl_impR.
-      apply IHD. intuition.
-      + subst. eapply has_type_app_inv2_l; [apply W2|].
-        now apply ht_other2.
-      + eapply has_type_app_inv2_r; [apply W2|].
-        now apply ht_other2.
-    - destruct W as [W1 W2]. set_unfold. eapply wrl_forL; [eassumption|].
-      apply IHD. intuition. subst.
+    - eapply wrl_cut; first [apply IHD1 | apply IHD2]; set_solver.
+    - apply wrl_cL. apply IHD; set_solver.
+    - apply wrl_wL; [|apply wrl_botL]; set_solver.
+    - assert (E : l ≡ l ∪ ∅); [set_solver|].
+      rewrite E. apply wrl_wL; [|apply wrl_topR].
+      clear E. set_solver.
+    - assert (is_form C <{b \/ d}>) by auto.
+      apply wrl_orL; first [apply IHD1 | apply IHD2];
+        intuition; subst; now has_type.
+    - apply wrl_orR1.
+      + now has_type.
+      + apply IHD; intuition; now has_type.
+    - apply wrl_orR2.
+      + now has_type.
+      + apply IHD; intuition. now has_type.
+    - assert (is_form C <{b /\ d}>) by auto.
+      apply wrl_andL1; [now has_type|].
+      apply IHD; intuition. subst. now has_type.
+    - assert (is_form C <{b /\ d}>) by auto.
+      apply wrl_andL2; [now has_type|].
+      apply IHD; intuition. subst. now has_type.
+    - assert (is_form C <{b /\ c}>) by auto. apply wrl_andR.
+      + apply IHD1. intuition. now has_type.
+      + apply IHD2. intuition. now has_type.
+    - assert (is_form C <{b > d}>) by auto. apply wrl_impL.
+      + apply IHD1. intuition. now has_type.
+      + apply IHD2; intuition. now has_type.
+    - assert (is_form C <{b > c}>) by auto. apply wrl_impR.
+      apply IHD; intuition; subst; now has_type.
+    - eapply wrl_forL; [eassumption|].
+      apply IHD; intuition. subst.
       eapply has_type_subst_last_s1; [eassumption|].
-      eapply has_type_abs_inv.
-      eapply has_type_app_inv.
-      + apply W1. now right.
-      + now apply ht_other2.
-    - destruct W as [W1 W2]. set_unfold. eapply wrl_forR; [eassumption|].
-      apply IHD. intuition.
-      + apply sq_set_map_spec in H1 as [a [Ha1 Ha2]]. subst.
-        apply has_type_lift1. auto.
-      + apply has_type_fold2_2.
-        * apply H.
-        * eapply has_type_abs_inv.
-          eapply has_type_app_inv; [apply W2|].
-          now apply ht_other2.
-    - destruct W as [W1 W2]. set_unfold. eapply wrl_exL; [eassumption|].
-      apply IHD. intuition.
+      assert (is_form C <{for T, b}>) by auto.
+      now has_type.
+    - eapply wrl_forR; [eassumption|].
+      apply IHD; intuition.
       + apply sq_set_map_spec in H2 as [a [Ha1 Ha2]]. subst.
         apply has_type_lift1. auto.
-      + subst. apply has_type_fold2_2.
-        * apply H.
-        * eapply has_type_abs_inv.
-          eapply has_type_app_inv.
-          -- apply W1. now right.
-          -- now apply ht_other2.
+      + apply has_type_fold2_2; [apply H1|].
+        now has_type.
+    - eapply wrl_exL; [eassumption|].
+      apply IHD; intuition.
+      + apply sq_set_map_spec in H3 as [a [Ha1 Ha2]]. subst.
+        apply has_type_lift1. auto.
+      + subst. apply has_type_fold2_2; [apply H1|].
+        assert (is_form C <{ex T, b}>) by auto.
+        now has_type.
       + now apply has_type_lift1.
-    - destruct W as [W1 W2]. set_unfold. eapply wrl_exR; [eassumption|].
-      apply IHD. intuition.
+    - eapply wrl_exR; [eassumption|].
+      apply IHD; intuition.
       eapply has_type_subst_last_s1; [eassumption|].
-      eapply has_type_abs_inv.
-      eapply has_type_app_inv.
-      + apply W2.
-      + now apply ht_other2.
-    - destruct W as [W1 W2]. set_unfold. eapply wrl_nabL; [eassumption|].
-      apply IHD. intuition. subst.
+      now has_type.
+    - eapply wrl_nabL; [eassumption|].
+      apply IHD; intuition. subst.
       eapply has_type_subst_last_s1.
       + now apply ht_other.
-      + eapply has_type_abs_inv.
-        eapply has_type_app_inv.
-        * apply W1. now right.
-        * now apply ht_other2.
-    - destruct W as [W1 W2]. set_unfold. eapply wrl_nabR; [eassumption|].
-      apply IHD. intuition.
+      + assert (is_form C <{nab T, b}>) by auto.
+        now has_type.
+    - eapply wrl_nabR; [eassumption|].
+      apply IHD; intuition.
       eapply has_type_subst_last_s1.
       + now apply ht_other.
-      + eapply has_type_abs_inv.
-        eapply has_type_app_inv.
-        * apply W2.
-        * now apply ht_other2.
+      + now has_type.
   Qed.
 
 

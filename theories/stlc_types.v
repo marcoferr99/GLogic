@@ -29,7 +29,7 @@ Module Type TY.
   Axiom ty_rect_other : forall P p a d t,
     forall O : ty_other t, ty_rect P p a d t = d t O.
 
-  Parameter decision_ty_other :
+  Parameter ty_eq_dec_other :
     forall A B, ty_other A -> ty_other B -> Decision (A = B).
 End TY.
 
@@ -68,20 +68,18 @@ Module TyTheories (Ty : TY).
   Proof.
     intros N.
     set (f := ty_rect _ false (fun _ _ _ _ => false) (fun _ _ => true)).
-    assert (f ty_prp = f ty_prp); [reflexivity|].
-    subst f.
-    rewrite ty_rect_prp in H at 1.
-    rewrite ty_rect_other in H; easy.
+    assert (E : f ty_prp = f ty_prp) by reflexivity. subst f.
+    rewrite ty_rect_prp in E at 1.
+    now rewrite ty_rect_other in E.
   Qed.
 
   Theorem ty_other_arr A B : ~ ty_other (ty_arr A B).
   Proof.
     intros N.
     set (f := ty_rect _ false (fun _ _ _ _ => false) (fun _ _ => true)).
-    assert (f (ty_arr A B) = f (ty_arr A B)); [reflexivity|].
-    subst f.
-    rewrite ty_rect_arr in H at 1.
-    rewrite ty_rect_other in H; easy.
+    assert (E : f (ty_arr A B) = f (ty_arr A B)) by reflexivity. subst f.
+    rewrite ty_rect_arr in E at 1.
+    now rewrite ty_rect_other in E.
   Qed.
 
   Inductive tyv : Set :=
@@ -114,9 +112,10 @@ Module TyTheories (Ty : TY).
 
   Theorem to_ty_to_tyv T : to_ty (to_tyv T) = T.
   Proof.
-    induction T using ty_ind; ty_simpl; try congruence;
-    unfold to_tyv; ty_simpl; congruence.
+    induction T using ty_ind; unfold to_tyv; ty_simpl; congruence.
   Qed.
+
+  Hint Rewrite to_ty_to_tyv : ty.
 
 
   Ltac to_tyv H := apply (f_equal to_tyv) in H; ty_simpl in H.
@@ -135,15 +134,17 @@ Module TyTheories (Ty : TY).
   Tactic Notation "ty_discriminate" ident(H) := ty_discriminate H.
   Tactic Notation "ty_discriminate" :=
     match goal with | [H : _ |- _] => ty_discriminate H end.
+  Ltac ty_induction T := induction T using ty_rect.
 
-  Instance ty_eq_decision : EqDecision ty.
+
+  Instance ty_eq_dec : EqDecision ty.
   Proof.
-    intros x. induction x using ty_rec; destruct y using ty_rec;
+    intros x. ty_induction x; destruct y using ty_rec;
       try (right; intros N; subst; ty_discriminate).
     - now constructor.
     - destruct (IHx1 y1), (IHx2 y2); subst; try (now left);
-        right; intros N; ty_injection N; contradiction.
-    - now apply decision_ty_other.
+        right; intros N; now ty_injection N.
+    - now apply ty_eq_dec_other.
   Qed.
 
 
