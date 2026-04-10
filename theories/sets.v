@@ -1,5 +1,9 @@
+Require Export base.
 From stdpp Require Export sets.
 
+
+Ltac2 Notation "set_solver" := ltac1:(set_solver).
+Ltac2 Notation "set_unfold" := ltac1:(set_unfold).
 
 Theorem union_empty `{SemiSet T C} (X : C) : ∅ ∪ X ≡ X.
 Proof. set_solver. Qed.

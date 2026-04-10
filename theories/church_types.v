@@ -44,7 +44,7 @@ Module TyChurch : TY.
 
   Definition ty_eq_dec_other A B :
     ty_other A -> ty_other B -> Decision (A = B).
-  Proof. solve_decision. Qed.
+  Proof. ltac1:(solve_decision). Qed.
 End TyChurch.
 
 

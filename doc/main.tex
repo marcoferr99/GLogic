@@ -130,7 +130,7 @@ Given a list of types $\Gamma$, a natural number $n$ and a type $T$, we denote t
 \begin{definition}
     Given a list of types $\Gamma$, a term $t$ and a type $T$, we define the proposition $\hastype{\Gamma}{t}{T}$ by the following inference rules:
     \begin{gather*}
-        \inferrule{ }{\hastype{\Gamma}{\lvln}{T}} \infcondr{if $\nth{\Gamma}{\lvln} = T$} \\
+        \inferrule{ }{\hastype{\Gamma}{\lvln}{\nth{\Gamma}{\lvln}}} \\
         %
         \inferrule{\hastype{\Gamma}{s}{\tyarr{A}{B}} \\ \hastype{\Gamma}{t}{A}}{\hastype{\Gamma}{\tmapp{s}{t}}{B}} \\
         %

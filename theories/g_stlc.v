@@ -131,19 +131,19 @@ Module GStlcTheories.
 
   Theorem nom_map_Proper : Proper (pointwise2_Equiv ==> (=) ==> (=)) nom_map.
   Proof.
-    intros f g E ? t ->. induction t; simpl; try easy; congruence.
+    intros f g E ? t ->. induction t; simpl; try (easy); congruence.
   Qed.
 
   Theorem nom_map_comp f g t :
     nom_map f (nom_map g t) = nom_map (fun T x => f T (g T x)) t.
   Proof.
-    induction t; simpl; try easy; congruence.
+    induction t; simpl; try (easy); congruence.
   Qed.
 
   Theorem level_prop_nom_map P f t :
     level_prop P (nom_map f t) <-> level_prop P t.
   Proof.
-    induction t; simpl; try easy.
+    induction t; simpl; try (easy).
     tm_simpl. intuition.
   Qed.
 
@@ -157,7 +157,7 @@ Module GStlcTheories.
 
   Theorem nom_map_id t : nom_map (fun _ => id) t = t.
   Proof.
-    induction t; try easy; simpl; congruence.
+    induction t; try (easy); simpl; congruence.
   Qed.
 
   (*
@@ -165,21 +165,42 @@ Module GStlcTheories.
   *)
   Hint Rewrite nom_map_id : tm.
 
-  Theorem has_type_nom_map f C T t :
-    has_type C (nom_map f t) T <->
-    has_type C t T.
+  Ltac2 Notation "gnorm" :=
+    Control.enter (fun () =>
+      change gtm_app with tm_app in *;
+      change gtm_abs with tm_abs in *
+    ).
+
+  Theorem has_type_nom_map1 f C T t :
+    has_type C (nom_map f t) T -> has_type C t T.
   Proof.
     revert C T.
-    induction t; intros C T; tm_simpl; try easy.
-    - split; intros [A]; exists A; now first [apply IHt1|apply IHt2].
-    - split; intros [B]; exists B; now try apply IHt.
-    - split; intros H; inversion H; subst; now tm_simpl.
+    induction t; intros C T H; tm_simpl in *; gnorm; auto; has_type; auto.
+    - eexists; first [apply IHt1|apply IHt2]; eassumption.
+    - inversion H. subst. simpl in *. now constructor.
+  Qed.
+
+  Theorem has_type_nom_map2 f C T t :
+    has_type C t T -> has_type C (nom_map f t) T.
+  Proof.
+    revert C T.
+    induction t; intros C T H; tm_simpl in *; gnorm; auto; has_type; auto.
+    - eexists; first [apply IHt1|apply IHt2]; eassumption.
+    - inversion H. subst. simpl in *. now constructor.
+  Qed.
+
+  Theorem has_type_nom_map f C T t :
+    has_type C (nom_map f t) T <-> has_type C t T.
+  Proof.
+    split.
+    - apply has_type_nom_map1.
+    - apply has_type_nom_map2.
   Qed.
 
   Theorem level_map_nom_map f g t :
     level_map g (nom_map f t) = nom_map f (level_map g t).
   Proof.
-    induction t; try easy; tm_simpl; now f_equal.
+    induction t; try easy; tm_simpl; gnorm; tm_simpl; now f_equal.
   Qed.
 
   (*
@@ -198,15 +219,15 @@ Module GStlcTheories.
     nom_map f (subst m l t) = subst m (nom_map f <$> l) (nom_map f t).
   Proof.
     revert m l.
-    induction t; intros m l; try easy; tm_simpl.
+    induction t; intros m l; try easy; tm_simpl; gnorm; tm_simpl.
     - unfold lookup_default. simpl. destruct (decide (n < l)).
       + now rewrite decide_True.
       + now rewrite decide_False.
     - now f_equal.
-    - rewrite IHt. f_equal. apply subst_Proper; [|reflexivity].
-      constructor; [reflexivity|].
+    - rewrite IHt. f_equal. apply subst_Proper > [|reflexivity].
+      constructor > [reflexivity|].
       intros n Hn. simpl in *. destruct (decide (n < l)).
-      + rewrite decide_True; [|easy]. symmetry. apply level_map_nom_map.
+      + rewrite decide_True > [|easy]. symmetry. apply level_map_nom_map.
       + rewrite decide_False; easy.
   Qed.
 
@@ -214,8 +235,8 @@ Module GStlcTheories.
     nom_map f (subst_last n m s t) = subst_last n m (nom_map f s) (nom_map f t).
   Proof.
     unfold subst_last. rewrite nom_map_subst.
-    apply subst_Proper; [|reflexivity].
-    simpl. constructor; [reflexivity|].
+    apply subst_Proper > [|reflexivity].
+    simpl. constructor > [reflexivity|].
     intros a Ha. simpl in *. now destruct (decide (a < n)).
   Qed.
 
@@ -225,7 +246,7 @@ Module GStlcTheories.
     lambda_equiv m a b -> lambda_equiv m (nom_map f a) (nom_map f b).
   Proof.
     intros H.
-    eapply rtsc_congruence; [|eassumption]. clear H.
+    eapply rtsc_congruence > [|eassumption]. clear H.
     intros x y H.
     induction H; subst.
     - constructor. destruct H; destruct H; simpl.
@@ -271,8 +292,8 @@ Module GStlcTheories.
     intros n Hn N.
     induction t; unfold in_supp in *; simpl in *; try easy.
     - destruct N.
-      + apply IHt1; [lia|assumption].
-      + apply IHt2; [lia|assumption].
+      + apply IHt1 > [lia|assumption].
+      + apply IHt2 > [lia|assumption].
     - auto.
     - injection N. lia.
   Qed.
@@ -301,13 +322,13 @@ Module GStlcTheories.
       + apply Hfg.
       + apply Hgf.
       + symmetry.
-        replace b with (nom_map g (nom_map f b)); [now apply lambda_equiv_nom_map|].
+        ltac1:(replace b with (nom_map g (nom_map f b))) > [now apply lambda_equiv_nom_map|].
         rewrite <- (nom_map_id b) at 2.
         rewrite nom_map_comp. now apply nom_map_Proper.
     - intros y z [f g Hgf Hfg] [h l Hlh Hhl].
       eapply (tm_equiv_intro (fun T x => f T (h T x)) (fun T x => l T (g T x)));
-        try congruence.
-      etransitivity; [eassumption|].
+        try (congruence).
+      etransitivity > [eassumption|].
       rewrite <- (nom_map_comp f h).
       now apply lambda_equiv_nom_map.
   Qed.

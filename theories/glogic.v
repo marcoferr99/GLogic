@@ -222,14 +222,14 @@ Module GLogic (SqSet : SQ_SET).
     Proper ((=) ==> (≡) ==> (=) ==> iff) is_derivable_wf.
   Proof.
     intros ? ** ? ** ? **. subst.
-    split; intros H; eapply wrl_set; try apply H; easy.
+    split; intros H; eapply wrl_set; try (apply H); easy.
   Qed.
 
   Instance is_derivable_Proper :
     Proper ((=) ==> (≡) ==> (=) ==> iff) is_derivable.
   Proof.
     intros ? ** ? ** ? **. subst.
-    split; intros H; eapply rl_set; try apply H; easy.
+    split; intros H; eapply rl_set; try (apply H); easy.
   Qed.
 
 
@@ -242,7 +242,7 @@ Module GLogic (SqSet : SQ_SET).
     - inversion F. now subst.
     - simpl. destruct h; inversion F. subst.
       eapply IHl; try eassumption.
-      tm_simpl. now exists t0.
+      has_type. now (exists t0).
   Qed.
 
   Theorem has_type_fold2 C T sb b :
@@ -254,7 +254,8 @@ Module GLogic (SqSet : SQ_SET).
     eapply (has_type_subst_last2 _ (C +: foldr ty_arr T (type_check_other <$> sb)));
       simpl; try eassumption; try lia.
     - intros. now rewrite decide_True.
-    - eapply has_type_fold; tm_simpl; [|rewrite decide_False; intuition lia].
+    - eapply has_type_fold; has_type.
+      2:{ simpl. rewrite decide_False; ltac1:(intuition lia). }
       remember (C +: foldr ty_arr T (type_check_other <$> sb)) as D eqn : ED.
       clear ED H0. induction sb; simpl in *; constructor.
       + constructor. set_unfold. eapply in_supp_other. auto.
@@ -270,7 +271,8 @@ Module GLogic (SqSet : SQ_SET).
     eapply has_type_subst_last1.
     - tm_simpl. lia.
     - intros. tm_simpl. now rewrite decide_True.
-    - eapply has_type_fold; tm_simpl; [|rewrite decide_False; intuition lia].
+    - eapply has_type_fold; has_type.
+      2:{ simpl. rewrite decide_False; ltac1:(intuition lia). }
       remember (C +: foldr ty_arr T (type_check_other <$> sb)) as D eqn : ED.
       clear ED H0. induction sb; simpl in *; constructor.
       + constructor. set_unfold. eapply in_supp_other. auto.
@@ -290,46 +292,40 @@ Module GLogic (SqSet : SQ_SET).
     - set_unfold. intuition. subst. now constructor.
     - set_unfold. intuition. now constructor.
     - set_unfold. intuition. subst.
-      repeat eapply ht_app; auto. now apply ht_other2.
-    - intuition. repeat eapply ht_app; try eassumption. now apply ht_other2.
-    - intuition. repeat eapply ht_app; try eassumption. now apply ht_other2.
+      repeat (eapply ht_app); auto. now apply ht_other2.
+    - intuition. repeat (eapply ht_app); try eassumption. now apply ht_other2.
+    - intuition. repeat (eapply ht_app); try eassumption. now apply ht_other2.
     - set_unfold. intuition. subst.
-      repeat eapply ht_app; eauto. now apply ht_other2.
+      repeat (eapply ht_app); eauto. now apply ht_other2.
     - set_unfold. intuition. subst.
-      repeat eapply ht_app; eauto. now apply ht_other2.
-    - intuition. repeat eapply ht_app; try eassumption. now apply ht_other2.
+      repeat (eapply ht_app); eauto. now apply ht_other2.
+    - intuition. repeat (eapply ht_app); try eassumption. now apply ht_other2.
     - set_unfold. intuition. subst.
-      repeat eapply ht_app; eauto. now apply ht_other2.
+      repeat (eapply ht_app); eauto. now apply ht_other2.
     - set_unfold. intuition.
-      repeat eapply ht_app; eauto. now apply ht_other2.
+      repeat (eapply ht_app); eauto. now apply ht_other2.
     - set_unfold. intuition. subst. econstructor.
       + now apply ht_other2.
-      + tm_simpl. eexists; try reflexivity.
-        eapply has_type_subst_last2; eauto.
-    - unfold wf_sq_set. intuition; [|econstructor].
+      + has_type. eapply has_type_subst_last2; eauto.
+    - unfold wf_sq_set. intuition > [|econstructor].
       + eapply has_type_lift2.
         apply H0. apply sq_set_map_spec. eauto.
       + now apply ht_other2.
-      + tm_simpl. eexists; intuition.
-        eapply has_type_fold2; try eassumption. apply H.
+      + has_type. eapply has_type_fold2; try eassumption. apply H.
     - set_unfold. intuition.
       + eapply has_type_lift2. apply H0. left.
         apply sq_set_map_spec. eauto.
-      + subst. econstructor; [now apply ht_other2|].
-        tm_simpl. eexists; try reflexivity.
-        eapply has_type_fold2; auto. apply H.
+      + subst. econstructor > [now apply ht_other2|].
+        has_type. eapply has_type_fold2; auto. apply H.
       + eapply has_type_lift2; eassumption.
-    - intuition. econstructor; [now apply ht_other2|].
-      tm_simpl. eexists; [|reflexivity].
-      eapply has_type_subst_last2; eauto.
+    - intuition. econstructor > [now apply ht_other2|].
+      has_type. eapply has_type_subst_last2; eauto.
     - set_unfold. intuition. subst.
-      econstructor; [now apply ht_other2|].
-      tm_simpl. eexists; [|reflexivity].
-      eapply has_type_subst_last2; eauto.
+      econstructor > [now apply ht_other2|].
+      has_type. eapply has_type_subst_last2; eauto.
       now constructor.
-    - intuition. econstructor; [now apply ht_other2|].
-      tm_simpl. eexists; [|reflexivity].
-      eapply has_type_subst_last2; eauto.
+    - intuition. econstructor > [now apply ht_other2|].
+      has_type. eapply has_type_subst_last2; eauto.
       now constructor.
   Qed.
 
@@ -338,18 +334,18 @@ Module GLogic (SqSet : SQ_SET).
   Proof.
     revert C l m c.
     assert (MU : forall C h l, sq_set_map (lift C) <{ h ∪ l }> ≡ (sq_set_map (lift C) h) ∪ (sq_set_map (lift C) l) ). {
-      intros C h1 h2 x. set_unfold. repeat rewrite sq_set_map_spec.
+      intros C h1 h2 x. set_unfold. repeat (rewrite sq_set_map_spec).
       set_unfold. split.
-      - intros [y [Hy ->]]. destruct Hy; intuition eauto.
+      - intros [y [Hy ->]]. destruct Hy; ltac1:(intuition eauto).
       - intros [[y [Hy ->]] | [y [Hy ->]]]; eauto.
     }
     intros * H. revert l.
-    induction H; intros h; try rewrite union_assoc in *.
+    induction H; intros h; try (rewrite union_assoc in *).
     - now rewrite <- H.
     - now apply rl_id.
     - eapply rl_cut; eauto.
     - apply rl_cL. specialize IHis_derivable with h.
-      now repeat rewrite union_assoc in *.
+      now repeat (rewrite union_assoc in *).
     - apply rl_botL.
     - apply rl_topR.
     - apply rl_orL; now rewrite <- union_assoc.
@@ -358,9 +354,9 @@ Module GLogic (SqSet : SQ_SET).
     - apply rl_andL1; now rewrite <- union_assoc.
     - apply rl_andL2; now rewrite <- union_assoc.
     - now apply rl_andR.
-    - apply rl_impL; [easy|]. now rewrite <- union_assoc.
+    - apply rl_impL > [easy|]. now rewrite <- union_assoc.
     - apply rl_impR. now rewrite <- union_assoc.
-    - eapply rl_forL; [eassumption|].
+    - eapply rl_forL > [eassumption|].
       now rewrite <- union_assoc.
     - eapply rl_forR; try eassumption.
       now rewrite MU.
@@ -404,73 +400,73 @@ Module GLogic (SqSet : SQ_SET).
     wf_sequent C l c ->  [{ C; l --> c }] -> is_derivable_wf C l c.
   Proof.
     intros [] D. unfold wf_sq_set in *. induction D; set_unfold.
-    - eapply wrl_set; [eassumption|].
+    - eapply wrl_set > [eassumption|].
       apply IHD; set_solver.
     - apply wrl_wL; try auto.
       apply wrl_id; auto.
     - eapply wrl_cut; first [apply IHD1 | apply IHD2]; set_solver.
     - apply wrl_cL. apply IHD; set_solver.
-    - apply wrl_wL; [|apply wrl_botL]; set_solver.
-    - assert (E : l ≡ l ∪ ∅); [set_solver|].
-      rewrite E. apply wrl_wL; [|apply wrl_topR].
+    - apply wrl_wL > [|apply wrl_botL]; set_solver.
+    - assert (E : l ≡ l ∪ ∅) > [set_solver|].
+      rewrite E. apply wrl_wL > [|apply wrl_topR].
       clear E. set_solver.
     - assert (is_form C <{b \/ d}>) by auto.
       apply wrl_orL; first [apply IHD1 | apply IHD2];
         intuition; subst; now has_type.
     - apply wrl_orR1.
       + now has_type.
-      + apply IHD; intuition; now has_type.
+      + apply IHD; intuition. now has_type.
     - apply wrl_orR2.
       + now has_type.
       + apply IHD; intuition. now has_type.
     - assert (is_form C <{b /\ d}>) by auto.
-      apply wrl_andL1; [now has_type|].
+      apply wrl_andL1 > [now has_type|].
       apply IHD; intuition. subst. now has_type.
     - assert (is_form C <{b /\ d}>) by auto.
-      apply wrl_andL2; [now has_type|].
+      apply wrl_andL2 > [now has_type|].
       apply IHD; intuition. subst. now has_type.
     - assert (is_form C <{b /\ c}>) by auto. apply wrl_andR.
       + apply IHD1. intuition. now has_type.
       + apply IHD2. intuition. now has_type.
     - assert (is_form C <{b > d}>) by auto. apply wrl_impL.
       + apply IHD1. intuition. now has_type.
-      + apply IHD2; intuition. now has_type.
+      + apply IHD2; intuition. subst. now has_type.
     - assert (is_form C <{b > c}>) by auto. apply wrl_impR.
       apply IHD; intuition; subst; now has_type.
-    - eapply wrl_forL; [eassumption|].
+    - eapply wrl_forL > [eassumption|].
       apply IHD; intuition. subst.
-      eapply has_type_subst_last_s1; [eassumption|].
+      eapply has_type_subst_last_s1 > [eassumption|].
       assert (is_form C <{for T, b}>) by auto.
-      now has_type.
-    - eapply wrl_forR; [eassumption|].
+      has_type. now ty_inj H3.
+    - eapply wrl_forR > [eassumption|].
       apply IHD; intuition.
       + apply sq_set_map_spec in H2 as [a [Ha1 Ha2]]. subst.
-        apply has_type_lift1. auto.
-      + apply has_type_fold2_2; [apply H1|].
-        now has_type.
-    - eapply wrl_exL; [eassumption|].
+        has_type. auto.
+      + apply has_type_fold2_2 > [apply H1|].
+        has_type. now ty_inj H2.
+    - eapply wrl_exL > [eassumption|].
       apply IHD; intuition.
       + apply sq_set_map_spec in H3 as [a [Ha1 Ha2]]. subst.
-        apply has_type_lift1. auto.
-      + subst. apply has_type_fold2_2; [apply H1|].
+        has_type. auto.
+      + subst. apply has_type_fold2_2 > [apply H1|].
         assert (is_form C <{ex T, b}>) by auto.
-        now has_type.
-      + now apply has_type_lift1.
-    - eapply wrl_exR; [eassumption|].
+        has_type. now ty_inj H3.
+      + now has_type.
+    - eapply wrl_exR > [eassumption|].
       apply IHD; intuition.
-      eapply has_type_subst_last_s1; [eassumption|].
-      now has_type.
-    - eapply wrl_nabL; [eassumption|].
+      eapply has_type_subst_last_s1 > [eassumption|].
+      has_type. now ty_inj H3.
+    - eapply wrl_nabL > [eassumption|].
       apply IHD; intuition. subst.
       eapply has_type_subst_last_s1.
       + now apply ht_other.
       + assert (is_form C <{nab T, b}>) by auto.
-        now has_type.
-    - eapply wrl_nabR; [eassumption|].
+        has_type. now ty_inj H3.
+    - eapply wrl_nabR > [eassumption|].
       apply IHD; intuition.
       eapply has_type_subst_last_s1.
       + now apply ht_other.
-      + now has_type.
+      + has_type. now ty_inj H3.
   Qed.
 
 
@@ -524,10 +520,12 @@ Module GLogic (SqSet : SQ_SET).
   Proof.
     destruct (nom_in_supp B T) as [a Ha].
     constructor; constructor.
-    - apply (rl_nabL a); tm_simpl; [easy|].
+    - apply (rl_nabL a); tm_simpl.
+      { assumption. }
       apply contrapositive. apply (rl_nabL a Ha).
       apply rl_id2.
-    - apply (rl_nabR a); tm_simpl; [easy|].
+    - apply (rl_nabR a); tm_simpl.
+      { assumption. }
       apply contrapositive. apply (rl_nabR a Ha).
       apply rl_id2.
   Qed.
@@ -537,7 +535,7 @@ Module GLogic (SqSet : SQ_SET).
   Proof.
     destruct (nom_in_supp <{ b \/ c }> T) as [n Hn].
     constructor; constructor.
-    - apply (rl_nabL n); [easy|].
+    - apply (rl_nabL n) > [easy|].
       tm_simpl. apply rl_orL.
       + apply rl_orR1. apply (rl_nabR n).
         * unfold in_supp in *. simpl in *. intuition.
@@ -545,7 +543,7 @@ Module GLogic (SqSet : SQ_SET).
       + apply rl_orR2. apply (rl_nabR n).
         * unfold in_supp in *. simpl in *. intuition.
         * apply rl_id2.
-    - apply (rl_nabR n); [easy|].
+    - apply (rl_nabR n) > [easy|].
       tm_simpl. apply rl_orL.
       + apply rl_orR1. apply (rl_nabL n).
         * unfold in_supp in *. simpl in *. intuition.

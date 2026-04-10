@@ -1,4 +1,4 @@
-Require Export base rlist.
+Require Export tactics rlist.
 
 
 (*********************************************)
@@ -54,15 +54,26 @@ Module TyTheories (Ty : TY).
   Create HintDb ty.
   Hint Rewrite ty_rect_prp ty_rect_arr : ty.
   Hint Rewrite ty_rect_other using assumption : ty.
-  Tactic Notation "ty_simpl" := repeat (simpl; autorewrite with ty).
-  Tactic Notation "ty_simpl" "in" ident(H) := repeat (simpl in H; autorewrite with ty in H).
-  Tactic Notation "ty_simpl" "in" "*" := repeat (simpl in *; autorewrite with ty in *).
+  (*
+  Ltac2 mutable ty_lemmas () :=
+    List.map (fun x => Strategy.term x true) [preterm:(ty_rect_prp); preterm:(ty_rect_arr)].
+  Ltac2 Notation ty_simpl :=
+    rewrite_strat (Strategy.topdown (Strategy.choices (ty_lemmas ()))) None; simpl.
+    *)
+  Ltac2 ty_simpl c := autorewrite @ty c; s_simpl c.
+  Ltac2 Notation "ty_simpl" "in" h(ident) := ty_simpl (one_hyp h).
+  Ltac2 Notation "ty_simpl" := ty_simpl goal.
+  (*
+  Tactic Notation "ty_simpl" "in" "*" := repeat (simpl in *; autorewrite with ty in * ).
+  *)
 
 
   Instance ty_inhabited : Inhabited ty := populate ty_prp.
 
   Definition ty_rec (P : ty -> Set) := ty_rect P.
   Definition ty_ind (P : ty -> Prop) := ty_rect P.
+
+  Ltac2 Notation "ty_induction" h(constr) := induction $h using ty_rect.
 
   Theorem ty_other_prp : ~ ty_other ty_prp.
   Proof.
@@ -98,9 +109,18 @@ Module TyTheories (Ty : TY).
 
   Theorem to_tyv_arr A B :
     to_tyv (ty_arr A B) = tyv_arr (to_tyv A) (to_tyv B).
-  Proof. unfold to_tyv. now ty_simpl. Qed.
+  Proof.
+    unfold to_tyv. now ty_simpl.
+  Qed.
+
+  Theorem to_tyv_other T : ty_other T ->
+    to_tyv T = tyv_other T.
+  Proof.
+    intros. unfold to_tyv. now ty_simpl.
+  Qed.
 
   Hint Rewrite to_tyv_prp to_tyv_arr : ty.
+  Hint Rewrite to_tyv_other using assumption : ty.
 
 
   Fixpoint to_ty T : ty :=
@@ -112,38 +132,55 @@ Module TyTheories (Ty : TY).
 
   Theorem to_ty_to_tyv T : to_ty (to_tyv T) = T.
   Proof.
-    induction T using ty_ind; unfold to_tyv; ty_simpl; congruence.
+    ty_induction T; ty_simpl; congruence.
   Qed.
 
   Hint Rewrite to_ty_to_tyv : ty.
 
 
-  Ltac to_tyv H := apply (f_equal to_tyv) in H; ty_simpl in H.
-  Ltac to_ty H :=
-    match type of H with
-    | to_tyv ?x = _ => apply (f_equal to_ty) in H; repeat rewrite to_ty_to_tyv in H
+  Ltac2 ty_discriminate_other h :=
+    lazy_match! (Constr.type h) with
+    | ty_other ty_prp => exfalso; apply (ty_other_prp $h)
+    | ty_other (ty_arr ?a ?b) => exfalso; apply (ty_other_arr $a $b $h)
     end.
-  Tactic Notation "to_ty" := match goal with [H : _ |- _] => to_ty H end.
-  Ltac ty_injection H := to_tyv H; injection H; intros; repeat to_ty; subst; clear H.
-  Ltac ty_discriminate H :=
-    match type of H with
-    | ty_other ty_prp => exfalso; now apply ty_other_prp
-    | ty_other (ty_arr ?A ?B) => exfalso; now apply (ty_other_arr A B)
-    | _ => to_tyv H; discriminate H
-    end.
-  Tactic Notation "ty_discriminate" ident(H) := ty_discriminate H.
-  Tactic Notation "ty_discriminate" :=
-    match goal with | [H : _ |- _] => ty_discriminate H end.
-  Ltac ty_induction T := induction T using ty_rect.
+
+  Ltac2 ty_view_parameters () := {
+    to_tp := 'to_ty;
+    to_view := 'to_tyv;
+    to_tp_to_view := 'to_ty_to_tyv;
+    tp_simpl := ty_simpl;
+    discriminate_other := ty_discriminate_other
+  }.
+
+  Ltac2 Notation "ty_discriminate" h(ident) := tp_discriminate (ty_view_parameters ()) h.
+  Ltac2 Notation "ty_discriminate" := tp_discriminate_all (ty_view_parameters ()).
+  Ltac2 Notation "ty_injection" h(ident) :=
+    Control.enter (fun () => tp_injection (ty_view_parameters ()) h).
+
+
+  Theorem ty_arr_inj X Y A B : ty_arr X Y = ty_arr A B -> X = A /\ Y = B.
+  Proof. intros H. now ty_injection H. Qed.
+
+  Ltac2 Notation "ty_inj" h(ident) := Control.enter (fun () => c_injection 'ty_arr_inj h).
+  (*
+  Ltac2 Notation "ty_inj_h" h(ident) :=
+    Control.enter ( fun () =>
+      let h1 := Fresh.in_goal @H in let h2 := Fresh.in_goal @I in
+      apply ty_arr_inj in $h as [$h1 $h2];
+      let c1 := Control.hyp h1 in let c2 := Control.hyp h2 in
+      try (rewrite $c1 in * ); try (rewrite $c2 in * )
+    ).
+  *)
 
 
   Instance ty_eq_dec : EqDecision ty.
   Proof.
-    intros x. ty_induction x; destruct y using ty_rec;
+    intros x.
+    ty_induction x; destruct y using ty_rec;
       try (right; intros N; subst; ty_discriminate).
     - now constructor.
     - destruct (IHx1 y1), (IHx2 y2); subst; try (now left);
-        right; intros N; now ty_injection N.
+        right; intros N; ty_inj N; congruence.
     - now apply ty_eq_dec_other.
   Qed.
 
