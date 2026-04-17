@@ -437,36 +437,36 @@ Module GLogic (SqSet : SQ_SET).
       apply IHD; intuition. subst.
       eapply has_type_subst_last_s1 > [eassumption|].
       assert (is_form C <{for T, b}>) by auto.
-      has_type. now ty_inj H3.
+      has_type. now ty_injection E.
     - eapply wrl_forR > [eassumption|].
       apply IHD; intuition.
       + apply sq_set_map_spec in H2 as [a [Ha1 Ha2]]. subst.
         has_type. auto.
       + apply has_type_fold2_2 > [apply H1|].
-        has_type. now ty_inj H2.
+        has_type. now ty_injection E.
     - eapply wrl_exL > [eassumption|].
       apply IHD; intuition.
       + apply sq_set_map_spec in H3 as [a [Ha1 Ha2]]. subst.
         has_type. auto.
       + subst. apply has_type_fold2_2 > [apply H1|].
         assert (is_form C <{ex T, b}>) by auto.
-        has_type. now ty_inj H3.
+        has_type. now ty_injection E.
       + now has_type.
     - eapply wrl_exR > [eassumption|].
       apply IHD; intuition.
       eapply has_type_subst_last_s1 > [eassumption|].
-      has_type. now ty_inj H3.
+      has_type. now ty_injection E.
     - eapply wrl_nabL > [eassumption|].
       apply IHD; intuition. subst.
       eapply has_type_subst_last_s1.
       + now apply ht_other.
       + assert (is_form C <{nab T, b}>) by auto.
-        has_type. now ty_inj H3.
+        has_type. now ty_injection E.
     - eapply wrl_nabR > [eassumption|].
       apply IHD; intuition.
       eapply has_type_subst_last_s1.
       + now apply ht_other.
-      + has_type. now ty_inj H3.
+      + has_type. now ty_injection E.
   Qed.
 
 

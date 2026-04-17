@@ -1,4 +1,4 @@
-From Ltac2 Require Export Ltac2 Rewrite.
+From Ltac2 Require Export Ltac2.
 
 (** Global notation declarations. *)
 Declare Scope stlc_scope.

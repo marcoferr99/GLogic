@@ -1,4 +1,5 @@
 Require Export tactics rlist.
+From Ltac2 Require Export Rewrite.
 
 
 (*********************************************)
@@ -41,6 +42,12 @@ Declare Custom Entry stlc_ty.
 Module TyTheories (Ty : TY).
   Export Ty.
 
+  Instance ty_inhabited : Inhabited ty := populate ty_prp.
+
+  Definition ty_rec (P : ty -> Set) := ty_rect P.
+  Definition ty_ind (P : ty -> Prop) := ty_rect P.
+
+
   (** Notations *)
   Notation "-[ x ]-" := x (x custom stlc_ty) : stlc_scope.
   Notation "x" := x (in custom stlc_ty at level 0, x global) : stlc_scope.
@@ -49,6 +56,7 @@ Module TyTheories (Ty : TY).
   Notation "( t )" := t
     (in custom stlc_ty at level 0, t custom stlc_ty) : stlc_scope.
   Notation "'o'" := ty_prp (in custom stlc_ty at level 0) : stlc_scope.
+
 
   (** Tactics *)
   Create HintDb ty.
@@ -66,15 +74,10 @@ Module TyTheories (Ty : TY).
   (*
   Tactic Notation "ty_simpl" "in" "*" := repeat (simpl in *; autorewrite with ty in * ).
   *)
-
-
-  Instance ty_inhabited : Inhabited ty := populate ty_prp.
-
-  Definition ty_rec (P : ty -> Set) := ty_rect P.
-  Definition ty_ind (P : ty -> Prop) := ty_rect P.
-
   Ltac2 Notation "ty_induction" h(constr) := induction $h using ty_rect.
 
+
+  (*
   Theorem ty_other_prp : ~ ty_other ty_prp.
   Proof.
     intros N.
@@ -92,52 +95,54 @@ Module TyTheories (Ty : TY).
     rewrite ty_rect_arr in E at 1.
     now rewrite ty_rect_other in E.
   Qed.
+  *)
 
-  Inductive tyv : Set :=
-    | tyv_prp : tyv
-    | tyv_arr : tyv -> tyv -> tyv
-    | tyv_other : ty -> tyv.
+  Module ty_view.
+    Inductive tyv : Set :=
+      | tyv_prp : tyv
+      | tyv_arr : tyv -> tyv -> tyv
+      | tyv_other : ty -> tyv.
 
-  Definition to_tyv : ty -> tyv :=
-    ty_rec _
-      tyv_prp
-      (fun _ fA _ fB => tyv_arr fA fB)
-      (fun T _ => tyv_other T).
+    Definition to_tyv : ty -> tyv :=
+      ty_rec _
+        tyv_prp
+        (fun _ fA _ fB => tyv_arr fA fB)
+        (fun T _ => tyv_other T).
 
-  Theorem to_tyv_prp : to_tyv ty_prp = tyv_prp.
-  Proof. unfold to_tyv. now ty_simpl. Qed.
+    Theorem to_tyv_prp : to_tyv ty_prp = tyv_prp.
+    Proof. unfold to_tyv. now ty_simpl. Qed.
 
-  Theorem to_tyv_arr A B :
-    to_tyv (ty_arr A B) = tyv_arr (to_tyv A) (to_tyv B).
-  Proof.
-    unfold to_tyv. now ty_simpl.
-  Qed.
+    Theorem to_tyv_arr A B :
+      to_tyv (ty_arr A B) = tyv_arr (to_tyv A) (to_tyv B).
+    Proof.
+      unfold to_tyv. now ty_simpl.
+    Qed.
 
-  Theorem to_tyv_other T : ty_other T ->
-    to_tyv T = tyv_other T.
-  Proof.
-    intros. unfold to_tyv. now ty_simpl.
-  Qed.
-
-  Hint Rewrite to_tyv_prp to_tyv_arr : ty.
-  Hint Rewrite to_tyv_other using assumption : ty.
-
-
-  Fixpoint to_ty T : ty :=
-    match T with
-    | tyv_prp => ty_prp
-    | tyv_arr A B => ty_arr (to_ty A) (to_ty B)
-    | tyv_other T => T
-    end.
-
-  Theorem to_ty_to_tyv T : to_ty (to_tyv T) = T.
-  Proof.
-    ty_induction T; ty_simpl; congruence.
-  Qed.
-
-  Hint Rewrite to_ty_to_tyv : ty.
+    Theorem to_tyv_other T : ty_other T ->
+      to_tyv T = tyv_other T.
+    Proof.
+      intros. unfold to_tyv. now ty_simpl.
+    Qed.
 
 
+    Fixpoint to_ty T : ty :=
+      match T with
+      | tyv_prp => ty_prp
+      | tyv_arr A B => ty_arr (to_ty A) (to_ty B)
+      | tyv_other T => T
+      end.
+
+    Theorem to_ty_to_tyv T : to_ty (to_tyv T) = T.
+    Proof.
+      ty_induction T.
+      - now rewrite to_tyv_prp.
+      - rewrite to_tyv_arr. simpl. congruence.
+      - now rewrite to_tyv_other.
+    Qed.
+  End ty_view.
+
+
+  (*
   Ltac2 ty_discriminate_other h :=
     lazy_match! (Constr.type h) with
     | ty_other ty_prp => exfalso; apply (ty_other_prp $h)
@@ -154,33 +159,66 @@ Module TyTheories (Ty : TY).
 
   Ltac2 Notation "ty_discriminate" h(ident) := tp_discriminate (ty_view_parameters ()) h.
   Ltac2 Notation "ty_discriminate" := tp_discriminate_all (ty_view_parameters ()).
-  Ltac2 Notation "ty_injection" h(ident) :=
-    Control.enter (fun () => tp_injection (ty_view_parameters ()) h).
-
-
-  Theorem ty_arr_inj X Y A B : ty_arr X Y = ty_arr A B -> X = A /\ Y = B.
-  Proof. intros H. now ty_injection H. Qed.
-
-  Ltac2 Notation "ty_inj" h(ident) := Control.enter (fun () => c_injection 'ty_arr_inj h).
-  (*
-  Ltac2 Notation "ty_inj_h" h(ident) :=
-    Control.enter ( fun () =>
-      let h1 := Fresh.in_goal @H in let h2 := Fresh.in_goal @I in
-      apply ty_arr_inj in $h as [$h1 $h2];
-      let c1 := Control.hyp h1 in let c2 := Control.hyp h2 in
-      try (rewrite $c1 in * ); try (rewrite $c2 in * )
-    ).
   *)
 
+
+  Theorem ty_arr_inj {X Y A B} : ty_arr X Y = ty_arr A B -> X = A /\ Y = B.
+  Proof.
+    intros H.
+    apply (f_equal ty_view.to_tyv) in H. repeat (rewrite ty_view.to_tyv_arr in H).
+    injection H. intros HY HX.
+    apply (f_equal ty_view.to_ty) in HY. apply (f_equal ty_view.to_ty) in HX.
+    repeat (rewrite ty_view.to_ty_to_tyv in *). auto.
+  Qed.
+
+  Ltac2 Notation "ty_injection" h(ident) :=
+    Control.enter (fun () =>
+      let c := Control.hyp h in c_injection [fun () => 'ty_arr_inj] c
+    ).
+
+  (*
+  Ltac2 rec get_head x :=
+    lazy_match! x with
+    | ?f _ => get_head f
+    | ?a => a
+    end.
+    *)
+
+  (*
+  Ltac2 ty_lemmas () :=
+    List.map (fun x => Strategy.term x true) [preterm:(ty_rect_prp); preterm:(ty_rect_arr)].
+  Ltac2 ty_simpl1 h :=
+    rewrite_strat (Strategy.topdown (Strategy.choices (ty_lemmas ()))) (Some h).
+
+  Ltac2 test () : Strategy.t :=
+    Strategy.choices [Strategy.term preterm:(ty_rect_prp) true; Strategy.term preterm:(ty_rect_arr) true].
+  *)
+
+  Ltac2 ty_discriminate_f x :=
+    lazy_match! x with
+    | ty_prp => '(ty_rect (fun _ => Prop) True (fun _ _ _ _ => False) (fun _ _ => False))
+    | ty_arr _ _ => '(ty_rect (fun _ => Prop) False (fun _ _ _ _ => True) (fun _ _ => False))
+    | _ => '(ty_rect (fun _ => Prop) False (fun _ _ _ _ => False) (fun _ _ => True))
+    end.
+
+  Ltac2 ty_discriminate_rew h :=
+    repeat (first [
+      rewrite ty_rect_prp in $h
+    | rewrite ty_rect_arr in $h
+    | rewrite ty_rect_other in $h by assumption
+    ]).
+
+  Ltac2 Notation "ty_discriminate" h(ident) :=
+    c_discriminate ty_discriminate_f (ty_discriminate_rew) h.
 
   Instance ty_eq_dec : EqDecision ty.
   Proof.
     intros x.
     ty_induction x; destruct y using ty_rec;
-      try (right; intros N; subst; ty_discriminate).
+      try (right; intros N; ty_discriminate N).
     - now constructor.
     - destruct (IHx1 y1), (IHx2 y2); subst; try (now left);
-        right; intros N; ty_inj N; congruence.
+        right; intros N; ty_injection N; congruence.
     - now apply ty_eq_dec_other.
   Qed.
 

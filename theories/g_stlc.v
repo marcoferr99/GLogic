@@ -177,7 +177,6 @@ Module GStlcTheories.
     revert C T.
     induction t; intros C T H; tm_simpl in *; gnorm; auto; has_type; auto.
     - eexists; first [apply IHt1|apply IHt2]; eassumption.
-    - inversion H. subst. simpl in *. now constructor.
   Qed.
 
   Theorem has_type_nom_map2 f C T t :
@@ -186,7 +185,6 @@ Module GStlcTheories.
     revert C T.
     induction t; intros C T H; tm_simpl in *; gnorm; auto; has_type; auto.
     - eexists; first [apply IHt1|apply IHt2]; eassumption.
-    - inversion H. subst. simpl in *. now constructor.
   Qed.
 
   Theorem has_type_nom_map f C T t :
