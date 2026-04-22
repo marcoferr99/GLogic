@@ -71,31 +71,11 @@ Module TyTheories (Ty : TY).
   Ltac2 ty_simpl c := autorewrite @ty c; s_simpl c.
   Ltac2 Notation "ty_simpl" "in" h(ident) := ty_simpl (one_hyp h).
   Ltac2 Notation "ty_simpl" := ty_simpl goal.
-  (*
-  Tactic Notation "ty_simpl" "in" "*" := repeat (simpl in *; autorewrite with ty in * ).
-  *)
+  (* Tactic Notation "ty_simpl" "in" "*" := repeat (simpl in *; autorewrite with ty in * ).  *)
   Ltac2 Notation "ty_induction" h(constr) := induction $h using ty_rect.
 
 
-  (*
-  Theorem ty_other_prp : ~ ty_other ty_prp.
-  Proof.
-    intros N.
-    set (f := ty_rect _ false (fun _ _ _ _ => false) (fun _ _ => true)).
-    assert (E : f ty_prp = f ty_prp) by reflexivity. subst f.
-    rewrite ty_rect_prp in E at 1.
-    now rewrite ty_rect_other in E.
-  Qed.
-
-  Theorem ty_other_arr A B : ~ ty_other (ty_arr A B).
-  Proof.
-    intros N.
-    set (f := ty_rect _ false (fun _ _ _ _ => false) (fun _ _ => true)).
-    assert (E : f (ty_arr A B) = f (ty_arr A B)) by reflexivity. subst f.
-    rewrite ty_rect_arr in E at 1.
-    now rewrite ty_rect_other in E.
-  Qed.
-  *)
+  (** *** View *)
 
   Module ty_view.
     Inductive tyv : Set :=
@@ -142,25 +122,7 @@ Module TyTheories (Ty : TY).
   End ty_view.
 
 
-  (*
-  Ltac2 ty_discriminate_other h :=
-    lazy_match! (Constr.type h) with
-    | ty_other ty_prp => exfalso; apply (ty_other_prp $h)
-    | ty_other (ty_arr ?a ?b) => exfalso; apply (ty_other_arr $a $b $h)
-    end.
-
-  Ltac2 ty_view_parameters () := {
-    to_tp := 'to_ty;
-    to_view := 'to_tyv;
-    to_tp_to_view := 'to_ty_to_tyv;
-    tp_simpl := ty_simpl;
-    discriminate_other := ty_discriminate_other
-  }.
-
-  Ltac2 Notation "ty_discriminate" h(ident) := tp_discriminate (ty_view_parameters ()) h.
-  Ltac2 Notation "ty_discriminate" := tp_discriminate_all (ty_view_parameters ()).
-  *)
-
+  (** *** Injection and discriminate *)
 
   Theorem ty_arr_inj {X Y A B} : ty_arr X Y = ty_arr A B -> X = A /\ Y = B.
   Proof.
@@ -177,21 +139,10 @@ Module TyTheories (Ty : TY).
     ).
 
   (*
-  Ltac2 rec get_head x :=
-    lazy_match! x with
-    | ?f _ => get_head f
-    | ?a => a
-    end.
-    *)
-
-  (*
   Ltac2 ty_lemmas () :=
     List.map (fun x => Strategy.term x true) [preterm:(ty_rect_prp); preterm:(ty_rect_arr)].
   Ltac2 ty_simpl1 h :=
     rewrite_strat (Strategy.topdown (Strategy.choices (ty_lemmas ()))) (Some h).
-
-  Ltac2 test () : Strategy.t :=
-    Strategy.choices [Strategy.term preterm:(ty_rect_prp) true; Strategy.term preterm:(ty_rect_arr) true].
   *)
 
   Ltac2 ty_discriminate_f x :=
@@ -210,6 +161,9 @@ Module TyTheories (Ty : TY).
 
   Ltac2 Notation "ty_discriminate" h(ident) :=
     c_discriminate ty_discriminate_f (ty_discriminate_rew) h.
+
+
+  (** *** Other *)
 
   Instance ty_eq_dec : EqDecision ty.
   Proof.

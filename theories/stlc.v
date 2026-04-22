@@ -19,8 +19,6 @@ Module Type STLC.
   Export TyTheories.
 
 
-  (** *** Terms *)
-
   Parameter tm : Set.
   Parameter tm_lvl : nat -> tm.
   Parameter tm_app : tm -> tm -> tm.
@@ -56,8 +54,6 @@ Module StlcTheories (Stlc : STLC).
   Export Stlc.
 
 
-  (** *** Terms *)
-
   Coercion tm_lvl : nat >-> tm.
 
   Definition tm_rec (P : tm -> Set) := tm_rect P.
@@ -71,77 +67,11 @@ Module StlcTheories (Stlc : STLC).
   Ltac2 Notation "tm_simpl" "in" "*" := Control.enter (fun () => tm_simpl all).
   Ltac2 Notation "tm_simpl" "in" h(ident) := tm_simpl (one_hyp h).
   Ltac2 Notation "tm_simpl" := tm_simpl goal.
-  (*
-  Tactic Notation "tm_simpl" "in" "*" := repeat (simpl in *; autorewrite with tm in * ).
-  *)
   Ltac2 Notation "tm_induction" h(constr) := induction $h using tm_ind.
 
-  Ltac2 tm_discriminate_f x :=
-    lazy_match! x with
-    | tm_lvl _ => '(tm_rect _ (fun _ => True) (fun _ _ _ _ => False)
-      (fun _ _ _ => False) (fun _ _ => False))
-    | tm_app _ _ => '(tm_rect _ (fun _ => False) (fun _ _ _ _ => True)
-      (fun _ _ _ => False) (fun _ _ => False))
-    | tm_abs _ _ => '(tm_rect _ (fun _ => False) (fun _ _ _ _ => False)
-      (fun _ _ _ => True) (fun _ _ => False))
-    | _ => '(tm_rect _ (fun _ => False) (fun _ _ _ _ => False)
-      (fun _ _ _ => False) (fun _ _ => True))
-    end.
 
-  Ltac2 tm_discriminate_rew h :=
-    repeat (first [
-      rewrite tm_rect_lvl in $h
-    | rewrite tm_rect_app in $h
-    | rewrite tm_rect_abs in $h
-    | rewrite tm_rect_other in $h by assumption
-    ]).
+  (** *** View *)
 
-  Ltac2 tm_discriminate h :=
-    let disc := c_discriminate tm_discriminate_f tm_discriminate_rew in
-    let c := Control.hyp h in
-    lazy_match! (Constr.type c) with
-    | tm_other ?x => let a := Fresh.in_goal @a in let e := Fresh.in_goal @E in
-        remember $x as $a eqn : $e; disc e
-    | _ => disc h
-    end.
-
-  Ltac2 Notation "tm_discriminate" h(ident) := tm_discriminate h.
-  Ltac2 Notation "tm_discriminate" := try_all tm_discriminate.
-
-
-  (*
-  (** tm_other terms are distinct from tm_lvl, tm_app and tm_abs *)
-
-  Theorem tm_other_lvl n : ~ tm_other (tm_lvl n).
-  Proof.
-    intros N.
-    set (f := tm_rect _ (fun _ => false) (fun _ _ _ _ => false)
-      (fun _ _ _ => false) (fun _ _ => true)).
-    assert (E : f n = f n) by reflexivity. subst f.
-    rewrite tm_rect_lvl in E at 1. now rewrite tm_rect_other in E.
-  Qed.
-
-  Theorem tm_other_app s t : ~ tm_other (tm_app s t).
-  Proof.
-    intros N.
-    set (f := tm_rect _ (fun _ => false) (fun _ _ _ _ => false)
-      (fun _ _ _ => false) (fun _ _ => true)).
-    assert (E : f (tm_app s t) = f (tm_app s t)) by reflexivity. subst f.
-    rewrite tm_rect_app in E at 1. now rewrite tm_rect_other in E.
-  Qed.
-
-  Theorem tm_other_abs T t : ~ tm_other (tm_abs T t).
-  Proof.
-    intros N.
-    set (f := tm_rect _ (fun _ => false) (fun _ _ _ _ => false)
-      (fun _ _ _ => false) (fun _ _ => true)).
-    assert (E : f (tm_abs T t) = f (tm_abs T t)) by reflexivity. subst f.
-    rewrite tm_rect_abs in E at 1. now rewrite tm_rect_other in E.
-  Qed.
-  *)
-
-
-  (** Inductive type view *)
   Inductive tmv : Set :=
     | tmv_lvl : nat -> tmv
     | tmv_app : tmv -> tmv -> tmv
@@ -190,6 +120,9 @@ Module StlcTheories (Stlc : STLC).
 
   Hint Rewrite to_tm_to_tmv : tmv.
 
+
+  (** *** Injection and discriminate *)
+
   Theorem to_tmv_inj a b : to_tmv a = to_tmv b -> a = b.
   Proof.
     intros H. apply (f_equal to_tm) in H.
@@ -220,30 +153,37 @@ Module StlcTheories (Stlc : STLC).
       let c := Control.hyp h in c_injection [(fun () => 'tm_lvl_inj); (fun () => 'tm_app_inj); (fun () => 'tm_abs_inj)] c
     ).
 
-
-
-  (*
-  (** discriminate and injection for tm *)
-
-  Ltac2 tm_discriminate_other h :=
-    lazy_match! (Constr.type h) with
-    | tm_other (tm_lvl ?n) => exfalso; apply (tm_other_lvl $n $h)
-    | tm_other (tm_app ?a ?b) => exfalso; apply (tm_other_app $a $b $h)
-    | tm_other (tm_abs ?t ?a) => exfalso; apply (tm_other_abs $t $a $h)
+  Ltac2 tm_discriminate_f x :=
+    lazy_match! x with
+    | tm_lvl _ => '(tm_rect _ (fun _ => True) (fun _ _ _ _ => False)
+      (fun _ _ _ => False) (fun _ _ => False))
+    | tm_app _ _ => '(tm_rect _ (fun _ => False) (fun _ _ _ _ => True)
+      (fun _ _ _ => False) (fun _ _ => False))
+    | tm_abs _ _ => '(tm_rect _ (fun _ => False) (fun _ _ _ _ => False)
+      (fun _ _ _ => True) (fun _ _ => False))
+    | _ => '(tm_rect _ (fun _ => False) (fun _ _ _ _ => False)
+      (fun _ _ _ => False) (fun _ _ => True))
     end.
 
-  Ltac2 tm_view_parameters () := {
-    to_tp := 'to_tm;
-    to_view := 'to_tmv;
-    to_tp_to_view := 'to_tm_to_tmv;
-    tp_simpl := tm_simpl;
-    discriminate_other := tm_discriminate_other
-  }.
+  Ltac2 tm_discriminate_rew h :=
+    repeat (first [
+      rewrite tm_rect_lvl in $h
+    | rewrite tm_rect_app in $h
+    | rewrite tm_rect_abs in $h
+    | rewrite tm_rect_other in $h by assumption
+    ]).
 
-  Ltac2 Notation "tm_discriminate" h(ident) := tp_discriminate (tm_view_parameters ()) h.
-  Ltac2 Notation "tm_discriminate" := tp_discriminate_all (tm_view_parameters ()).
-  Ltac2 Notation "tm_injection" h(ident) := tp_injection (tm_view_parameters ()) h.
-  *)
+  Ltac2 tm_discriminate h :=
+    let disc := c_discriminate tm_discriminate_f tm_discriminate_rew in
+    let c := Control.hyp h in
+    lazy_match! (Constr.type c) with
+    | tm_other ?x => let a := Fresh.in_goal @a in let e := Fresh.in_goal @E in
+        remember $x as $a eqn : $e; disc e
+    | _ => disc h
+    end.
+
+  Ltac2 Notation "tm_discriminate" h(ident) := tm_discriminate h.
+  Ltac2 Notation "tm_discriminate" := first_hyp tm_discriminate.
 
 
   (**************)
@@ -274,7 +214,7 @@ Module StlcTheories (Stlc : STLC).
 
   Theorem has_type_app : forall {c s t B},
     has_type c (tm_app s t) B <->
-    exists2 A, has_type c s (ty_arr A B) & has_type c t A.
+    exists2 A, has_type c s -[ A -> B ]- & has_type c t A.
   Proof.
     split; intros H.
     - inversion H; try (tm_discriminate).
@@ -292,6 +232,10 @@ Module StlcTheories (Stlc : STLC).
     - destruct H. subst. now constructor.
   Qed.
 
+  Theorem has_type_abs1 {C A B t} :
+    has_type (C +: A) t B -> has_type C (tm_abs A t) -[ A -> B ]-.
+  Proof. intros H. apply has_type_abs. eauto. Qed.
+
   Theorem has_type_abs2 {C A B T t} :
     has_type C (tm_abs T t) -[ A -> B ]- ->
     has_type (C +: A) t B.
@@ -300,7 +244,7 @@ Module StlcTheories (Stlc : STLC).
     now ty_injection H0.
   Qed.
 
-  Theorem has_type_other {t T} C :
+  Theorem has_type_other {t T C} :
     tm_other t ->
     has_type C t T <-> T = type_check_other t.
   Proof.
@@ -315,22 +259,24 @@ Module StlcTheories (Stlc : STLC).
   Proof. apply has_type_other. Qed.
 
 
-  (*
-  Ltac2 has_type (c : constr) :=
-    let a := c_first (fun f => let f1 := f () in '($f1 $c)) ['has_type_lvl] in
-    *)
-    
+  (** *** Typing tactics *)
+
   Ltac2 ht_lvl (h : ident) : ident list :=
     let c := Control.hyp h in
     let i1 := Fresh.in_goal @L in let i2 := Fresh.in_goal @E in
-    destruct (proj1 has_type_lvl $c) as [$i1 $i2]; [i1; i2].
+    destruct (proj1 has_type_lvl $c) as [$i1 $i2]; [].
 
   Ltac2 ht_app h :=
     let c := Control.hyp h in
     let hs := Fresh.in_goal @Hs in let ht := Fresh.in_goal @Ht in
     destruct (proj1 has_type_app $c) as [? $hs $ht]; [hs; ht].
 
-  Ltac2 ht_abs h :=
+  Ltac2 ht_abs1 h :=
+    let c := Control.hyp h in
+    let h1 := Fresh.in_goal @H in
+    assert ($h1 := has_type_abs2 $c); [h1].
+
+  Ltac2 ht_abs2 h :=
     let c := Control.hyp h in
     let h1 := Fresh.in_goal @H in
     let e := Fresh.in_goal @E in
@@ -346,7 +292,7 @@ Module StlcTheories (Stlc : STLC).
         let a := Fresh.in_goal @H in
         assert ($a := has_type_other1 $o $c); simpl in $a; try (ty_injection $a);
         let ca := Control.hyp a in try (rewrite $ca in *); []
-      end.
+    end.
 
   (*
   Ltac2 ht_other h :=
@@ -365,9 +311,25 @@ Module StlcTheories (Stlc : STLC).
     end.
     *)
 
-  Ltac2 ht_first := fun x => c_first (fun f => f x) [ht_lvl; ht_app; ht_abs; ht_other].
+  Ltac2 ht_first := fun x => c_first (fun f => f x) [ht_lvl; ht_app; ht_abs1; ht_abs2; ht_other].
 
 
+  Ltac2 htg_lvl () := refine '(proj2 has_type_lvl _).
+  Ltac2 htg_app () := refine '(proj2 has_type_app _).
+  Ltac2 htg_abs1 () := refine '(has_type_abs1 _).
+  Ltac2 htg_other () :=
+    lazy_match! Control.goal () with
+    | has_type _ ?t _ =>
+        let ot := Fresh.in_goal @O in assert ($ot : tm_other $t) by easy;
+        let o := Control.hyp ot in
+        refine '(proj2 (has_type_other $o) _); try reflexivity
+    end.
+
+  Ltac2 mutable htg_list () := [htg_lvl; htg_app; htg_abs1; htg_other].
+  Ltac2 has_type_goal () := first0 (htg_list ()).
+
+  (*
+  Ltac2 has_type_goal () :=
   Ltac2 mutable has_type_goal () :=
     lazy_match! (Control.goal ()) with
     | has_type _ (tm_lvl _) _ => apply has_type_lvl
@@ -376,44 +338,15 @@ Module StlcTheories (Stlc : STLC).
     | has_type _ (tm_abs _ _) _ => apply has_type_abs; subst
     | has_type _ _ _ => apply has_type_other > [assumption|]; reflexivity
     end.
+  *)
 
   Ltac2 has_type h := i_iter ht_first [h].
   Ltac2 Notation "has_type" "in" h(ident) := has_type h.
   Ltac2 Notation "has_type" :=
     Control.enter (fun () => all_hyps (fun h => try (has_type h)); repeat (has_type_goal ())).
-  (*
-  Ltac2 has_type h :=
-    lazy_match! (Constr.type (Control.hyp h)) with
-    | has_type _ (tm_lvl _) _ => apply has_type_lvl in $h as []
-    | has_type _ (tm_app _ _) _ => apply has_type_app in $h as []
-    | has_type _ (tm_abs _ _) _ => apply has_type_abs in $h as []; subst
-    | has_type _ _ _ => apply has_type_other in $h > [|easy]; simpl in $h; try (ty_injection $h)
-    end.
 
-  Ltac2 mutable has_type_goal () :=
-    lazy_match! (Control.goal ()) with
-    | has_type _ (tm_lvl _) _ => apply has_type_lvl
-    | has_type _ (tm_app _ _) _ => apply has_type_app
-    | has_type _ (tm_abs _ _) (ty_arr _ _) => apply ht_abs; subst
-    | has_type _ (tm_abs _ _) _ => apply has_type_abs; subst
-    | has_type _ _ _ => apply has_type_other > [|assumption]
-    end.
 
-  Ltac2 Notation "has_type" "in" h(ident) := has_type h.
-  Ltac2 Notation "has_type" :=
-    Control.enter( fun () => repeat (
-      all_hyps (fun h => try (has_type h));
-      try (has_type_goal ()))
-    ).
-    *)
-
-  (*
-  Ltac2 Notation "has_type" :=
-    Control.enter( fun () => repeat (
-      all_hyps (fun h => try (has_type h));
-      try (has_type_goal ()))
-    ).
-    *)
+  (** *** Other typing lemmas *)
 
   Theorem has_type_unique {A B} C t :
     has_type C t A -> has_type C t B -> A = B.
@@ -514,48 +447,6 @@ Module StlcTheories (Stlc : STLC).
     intros H. tm_induction t; tm_simpl; congruence.
   Qed.
 
-  (*
-  Definition free_level_map f m :=
-    level_map (fun n => if decide (n < m) then f n else n).
-
-  Theorem has_type_free_level_map f c d t T :
-    rl_length c = |(d)| -> (forall n, d !! f n = c !! n) ->
-    has_type c t T ->
-    has_type d (free_level_map f |(c)| t) T.
-  Proof.
-    generalize dependent T.
-    generalize dependent d. generalize dependent c.
-    generalize dependent f.
-    induction t as [| | t |] using tm_ind; intros f c d T L Hf HT;
-      unfold free_level_map, level_map; tm_simpl.
-    - destruct (decide (n < |(c)|)) as [Hn | Hn].
-      + now rewrite Hf.
-      + exfalso. apply Hn. apply is_Some_lookup.
-        econstructor. eassumption.
-    - destruct HT as [A [Ht1 Ht2]].
-      exists A. split; eauto.
-    - destruct HT as [B [Hb Ht]].
-      exists B. split; [|assumption].
-      generalize level_map_f_eq. intros E.
-      unfold level_map in E. erewrite E; clear E.
-      + apply (IHt (fun n => if decide (n < |(c)|) then f n else n));
-          try eassumption; [repeat rewrite rlength_rcons; congruence|].
-        intros n.
-        lookup_rcons_spec c t n Hn En; destruct (decide (n < |(c)|)); try lia.
-        * rewrite lookup_rcons_lt; try auto.
-          apply is_Some_lookup in l. destruct l.
-          eapply is_Some_lookup. econstructor.
-          rewrite Hf. eassumption.
-        * subst. rewrite lookup_rcons_eq; auto.
-        * rewrite lookup_None1; try reflexivity; rewrite rlength_rcons; lia.
-      + intros n. simpl.
-        destruct (decide (n < |(c)|)), (decide (n < |(c +: t)|));
-          try reflexivity.
-        rewrite rlength_rcons in *. lia.
-    - assumption.
-  Qed.
-  *)
-
 
   (** Apply "f" to all bound variables in the term "t" *)
   Definition bound_level_map f m :=
@@ -610,7 +501,7 @@ Module StlcTheories (Stlc : STLC).
     eapply has_type_bound_level_map1_h; try eassumption; lia.
   Qed.
 
-  Theorem has_type_lift1 C c t T :
+  Theorem has_type_lift1 {C c t T} :
     has_type C t T ->
     has_type (C +: c) (lift C t) T.
   Proof.
@@ -626,19 +517,6 @@ Module StlcTheories (Stlc : STLC).
   Proof.
     intros. eapply has_type_bound_level_map2_h; try eassumption; lia.
   Qed.
-
-  (*
-  Theorem has_type_bound_level_map m (c d : context) t T :
-    rl_length d = m + c ->
-    (forall n, n < c -> d n = c n) ->
-    has_type c t T <->
-    has_type d (bound_level_map (add m) c t) T.
-  Proof.
-    split; intros.
-    - now apply has_type_bound_level_map1.
-    - eapply has_type_bound_level_map2; eassumption.
-  Qed.
-  *)
 
   Theorem has_type_lift2 C c t T :
     has_type (C +: c) (lift C t) T -> has_type C t T.
@@ -671,12 +549,16 @@ Module StlcTheories (Stlc : STLC).
       now tm_simpl.
   Qed.
 
+  Ltac2 htg_lift () := refine '(has_type_lift1 _).
+  Ltac2 Set htg_list as old := fun () => List.append (old ()) [htg_lift].
+  (*
   Ltac2 Set has_type_goal as old := fun () =>
     Control.plus old ( fun _ =>
       lazy_match! (Control.goal ()) with
       | has_type (?_c +: _) (lift (rl_length ?_c) _) _ => apply has_type_lift1
       end
     ).
+    *)
 
 
   (********************)
@@ -838,30 +720,6 @@ Module StlcTheories (Stlc : STLC).
     has_type (C +: T) t X.
   Proof. intros. eapply has_type_subst_last2; eauto. Qed.
 
-  (*
-  Theorem has_type_subst_last C T X s t :
-    has_type C s T ->
-    has_type (C +: T) t X <-> has_type C (subst_last |(C)| s t) X.
-  Proof.
-    intros Hs.
-    unfold subst_last. rewrite has_type_subst.
-    - split; intros H; apply H.
-    - rewrite rlength_rcons. lia.
-    - repeat rewrite rlength_rcons. f_equal.
-      apply rlength_build_rlist.
-    - intros.
-      destruct (lt_total n |(C)|) as [Ln | [En | Gn]].
-      + rewrite @lookup_rcons_lt in H, H0; try assumption.
-        * rewrite lookup_build_rlist in H; [|assumption].
-          injection H. intros <-. now tm_simpl.
-        * now rewrite rlength_build_rlist.
-      + rewrite @lookup_rcons_eq in H, H0; try assumption.
-        * injection H. injection H0. intros <- <-. assumption.
-        * now rewrite rlength_build_rlist.
-      + rewrite lookup_rcons_gt in H0; [discriminate|lia].
-  Qed.
-  *)
-
 
   (*****************)
   (** ** Reduction *)
@@ -888,6 +746,9 @@ Module StlcTheories (Stlc : STLC).
     revert T. ltac1:(generalize dependent C).
     induction BS; intros C Hl A HT; has_type; eauto.
     - subst. unfold preserves_type in *. eauto.
+    - apply IHBS.
+      + simpl. lia.
+      + assumption.
   Qed.
 
 
@@ -898,7 +759,7 @@ Module StlcTheories (Stlc : STLC).
   Theorem has_type_beta_conv : preserves_type beta_conv.
   Proof.
     unfold preserves_type. intros * HB **.
-    destruct HB. has_type. ty_injection E.
+    destruct HB. has_type.
     eapply has_type_subst_last1; try eassumption; easy.
   Qed.
 
@@ -918,225 +779,6 @@ Module StlcTheories (Stlc : STLC).
       rewrite decide_False in * by lia. ltac1:(intuition congruence).
   Qed.
 
-
-  (*
-  Definition beta_reduction m (t : tm) : tm :=
-    (fix fx m t :=
-    match t with
-    | tmv_lvl n => tm_lvl n
-    | tmv_app (tmv_abs T t) s =>
-        subst_last m (fx m s) (fx (S m) t)
-    | tmv_app s t => tm_app (fx m s) (fx m t)
-    | tmv_abs T t => tm_abs T (fx (S m) t)
-    | tmv_other t => t
-    end) m (to_tmv t).
-
-  Theorem beta_reduction_app_abs m T t s :
-    beta_reduction m (tm_app (tm_abs T t) s) = subst_last m (beta_reduction m s) (beta_reduction (S m) t).
-  Proof. unfold beta_reduction; now tm_simpl. Qed.
-
-  Theorem beta_reduction_app m s t :
-    (forall A a, s <> tm_abs A a) ->
-    beta_reduction m (tm_app s t) = tm_app (beta_reduction m s) (beta_reduction m t).
-  Proof.
-    intros N.
-    destruct s using tm_ind; unfold beta_reduction; tm_simpl; try reflexivity.
-    exfalso. now eapply N.
-  Qed.
-
-  Theorem beta_reduction_abs m T t :
-    beta_reduction m (tm_abs T t) = tm_abs T (beta_reduction (S m) t).
-  Proof. unfold beta_reduction; now tm_simpl. Qed.
-
-  Theorem beta_reduction_other m t :
-    tm_other t -> beta_reduction m t = t.
-  Proof.
-    intros. unfold beta_reduction. now tm_simpl.
-  Qed.
-
-  Hint Rewrite beta_reduction_app_abs beta_reduction_abs : tm.
-  Hint Rewrite beta_reduction_other using assumption : tm.
-
-
-  Definition eta_reduction m (t : tm) : tm :=
-    (fix fx m t :=
-    match t with
-    | tmv_lvl n => tm_lvl n
-    | tmv_abs T (tmv_app t (tmv_lvl n)) =>
-        if andb (eqb n m) (negb (contains_bound_levels m 1 (to_tm t))) then
-          bound_level_map (fun x => x - 1) m (to_tm t)
-          else tm_abs T (tm_app (fx (S m) t) (tm_lvl n))
-    | tmv_app s t => tm_app (fx m s) (fx m t)
-    | tmv_abs T t => tm_abs T (fx (S m) t)
-    | tmv_other t => t
-    end) m (to_tmv t).
-
-  Theorem eta_reduction_lvl m n:
-    eta_reduction m (tm_lvl n) = tm_lvl n.
-  Proof. unfold eta_reduction; now tm_simpl. Qed.
-
-  Theorem eta_reduction_app m s t :
-    eta_reduction m (tm_app s t) = tm_app (eta_reduction m s) (eta_reduction m t).
-  Proof. unfold eta_reduction; now tm_simpl. Qed.
-
-  Theorem eta_reduction_abs_app m T t:
-    contains_bound_levels m 1 t = false ->
-    eta_reduction m (tm_abs T (tm_app t (tm_lvl m))) =
-    bound_level_map (fun x => x - 1) m t.
-  Proof.
-    intros.
-    unfold eta_reduction. tm_simpl.
-    rewrite eqb_refl. now rewrite H.
-  Qed.
-
-  Theorem eta_reduction_abs_app2 m t T :
-    contains_bound_levels m 1 t = true ->
-    eta_reduction m (tm_abs T (tm_app t (tm_lvl m))) =
-    tm_abs T (tm_app (eta_reduction (S m) t) (tm_lvl m)).
-  Proof.
-    intros. unfold eta_reduction. tm_simpl.
-    rewrite eqb_refl. now rewrite H.
-  Qed.
-
-  Theorem eta_reduction_abs_app3 m n t T :
-    n <> m ->
-    eta_reduction m (tm_abs T (tm_app t (tm_lvl n))) =
-    tm_abs T (tm_app (eta_reduction (S m) t) (tm_lvl n)).
-  Proof.
-    intros. unfold eta_reduction. tm_simpl.
-    destruct (eqb_spec n m); [lia|].
-    reflexivity.
-  Qed.
-
-  Theorem eta_reduction_abs m T t :
-    (forall a, t <> tm_app a (tm_lvl m)) ->
-    eta_reduction m (tm_abs T t) = tm_abs T (eta_reduction (S m) t).
-  Proof.
-    intros N.
-    destruct t using tm_ind; unfold eta_reduction; tm_simpl; try reflexivity.
-    destruct t2 using tm_ind; tm_simpl; try reflexivity.
-    destruct (eqb_spec n m).
-    - subst. exfalso. now eapply N.
-    - auto.
-  Qed.
-
-  Hint Rewrite eta_reduction_app : tm.
-
-
-  Theorem has_type_beta_reduction C T t :
-    has_type C t T ->
-    has_type C (beta_reduction |(C)| t) T.
-  Proof.
-    generalize dependent T. generalize dependent C.
-    induction t using tm_ind; intros C A HT.
-    - unfold beta_reduction; now tm_simpl.
-    - tm_simpl. destruct HT as (B & Ht1 & Ht2).
-      assert (D : (forall T t, t1 <> tm_abs T t) \/ exists T t, t1 = tm_abs T t). {
-        destruct t1 using tm_ind; try (left; intros * ?; tm_discriminate).
-        right. eauto.
-      }
-      destruct D.
-      + rewrite beta_reduction_app; [|auto].
-        tm_simplg. exists B. split; auto.
-      + destruct H as (T & t & Ht). subst. tm_simplg.
-        eapply has_type_subst_last; [eauto|].
-        apply IHt1 in Ht1 as F. tm_simpl.
-        destruct F as (D & HD1 & HD2).
-        apply ty_arr_inj in HD2. destruct HD2. now subst.
-    - tm_simpl.
-      destruct HT as (B & HB1 & HB2).
-      eexists. split; [|eassumption].
-      replace (S |(C)|) with |(C +: T)|; [|now rewrite rlength_rcons].
-      now apply IHt.
-    - now tm_simpl.
-  Qed.
-
-  Theorem has_type_eta_reduction C T t :
-    has_type C t T ->
-    has_type C (eta_reduction |(C)| t) T.
-  Proof.
-    generalize dependent T. generalize dependent C.
-    induction t using tm_ind; intros C A HT.
-    - unfold eta_reduction; now tm_simpl.
-    - tm_simpl. destruct HT as (B & HB1 & HB2).
-      exists B. split; auto.
-    - tm_simpl. destruct HT as (B & HB1 & HB2).
-      assert (D : (forall a n, t0 <> tm_app a (tm_lvl n)) \/ exists a n, t0 = tm_app a (tm_lvl n)). {
-        destruct t0 using tm_ind; try (left; intros * ?; tm_discriminate).
-        destruct t0_2 using tm_ind; try (left; intros * ?; tm_discriminate).
-        - right. eauto.
-        - left. intros * N. tm_injection N. intros.
-          apply (f_equal to_tm) in H0. tm_simpl. tm_discriminate.
-      }
-      destruct D.
-      + rewrite eta_reduction_abs; [|auto].
-        tm_simplg. exists B. split; [|assumption].
-        apply IHt in HB1. now rewrite rlength_rcons in HB1.
-      + destruct H as (a & n & Ha). subst.
-        destruct (eqb_spec n |(C)|).
-        * subst.
-          destruct (contains_bound_levels |(C)| 1 a) eqn : E.
-          -- rewrite eta_reduction_abs_app2; [|assumption].
-             tm_simplg. exists B. split; [|reflexivity].
-             apply IHt in HB1. rewrite rlength_rcons in HB1.
-             now rewrite eta_reduction_app, eta_reduction_lvl in HB1.
-          -- rewrite eta_reduction_abs_app; [|assumption].
-             apply (has_type_bound_level_map2 1 _ (C +: T)).
-             ++ now rewrite rlength_rcons.
-             ++ intros n Hn. lookup_rcons_spec C T n H F; try reflexivity; lia.
-             ++ tm_simpl1 HB1.
-                rewrite bound_level_map_id; auto.
-                destruct HB1 as (A & HA1 & HA2).
-                tm_simpl. rewrite @lookup_rcons_eq in HA2; [|reflexivity].
-                injection HA2. now intros ->.
-        * rewrite eta_reduction_abs_app3; [|assumption].
-          tm_simplg. exists B. split; [|reflexivity].
-           apply IHt in HB1. rewrite rlength_rcons in HB1.
-           now rewrite eta_reduction_app, eta_reduction_lvl in HB1.
-    - unfold eta_reduction. now tm_simpl.
-  Qed.
-  *)
-
-
   Definition lambda_equiv m :=
     conv_eq (fun m a b => beta_conv m a b \/ eta_conv m a b) m.
-
-  (*
-  Inductive lambda_equiv m : tm -> tm -> Prop :=
-    | le_id t : lambda_equiv m t t
-    | le_beta a b c :
-        lambda_equiv m a b -> step beta_conv m b c -> lambda_equiv m a c
-    | le_eta a b c :
-        lambda_equiv m a b -> step eta_conv m b c -> lambda_equiv m a c.
-
-  Theorem th {A} (R : relation A) a b :
-    Equivalence R -> rtsc R a b <-> R a b.
-  Proof.
-    intros E. split; intros H.
-    - unfold rtsc in H. remember (sc R) as scR.
-      induction H; subst.
-      + now destruct E.
-      + destruct H.
-        * destruct E. eauto.
-        * destruct E. eauto.
-    - now apply rtsc_lr.
-  Qed.
-
-
-  Theorem has_type_lambda_equiv (C : context) T a b :
-    lambda_equiv C a b ->
-    has_type C a T -> has_type C b T.
-  Proof.
-    Search rtc.
-    intros LE HT.
-    induction LE; try easy.
-    - eapply has_type_step; eauto.
-      intros D A a b R Ha. destruct R.
-      + eapply has_type_beta_conv; eassumption.
-      + eapply has_type_eta_conv; eassumption.
-    -
-    - apply has_type_beta_conv.
-    - apply has_type_eta_conv.
-  Qed.
-  *)
 End StlcTheories.
