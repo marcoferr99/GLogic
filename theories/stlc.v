@@ -41,6 +41,9 @@ Module Type STLC.
   Axiom tm_rect_other : forall t P l a b o,
     forall O : tm_other t, tm_rect P l a b o t = o t O.
 
+  Parameter tm_eq_dec_other :
+    forall a b, tm_other a -> tm_other b -> Decision (a = b).
+
 
   Parameter type_check_other : tm -> ty.
 End STLC.
@@ -67,7 +70,7 @@ Module StlcTheories (Stlc : STLC).
   Ltac2 Notation "tm_simpl" "in" "*" := Control.enter (fun () => tm_simpl all).
   Ltac2 Notation "tm_simpl" "in" h(ident) := tm_simpl (one_hyp h).
   Ltac2 Notation "tm_simpl" := tm_simpl goal.
-  Ltac2 Notation "tm_induction" h(constr) := induction $h using tm_ind.
+  Ltac2 Notation "tm_induction" h(constr) := induction $h using tm_rect.
 
 
   (** *** View *)
@@ -184,6 +187,24 @@ Module StlcTheories (Stlc : STLC).
 
   Ltac2 Notation "tm_discriminate" h(ident) := tm_discriminate h.
   Ltac2 Notation "tm_discriminate" := first_hyp tm_discriminate.
+  
+
+  (** *** Equality *)
+
+  Instance tm_eq_dec : EqDecision tm.
+  Proof.
+    intros x.
+    tm_induction x; destruct y using tm_rec;
+      try (right; intros N; tm_discriminate N).
+    - destruct (decide (n = n0)).
+      + left. now f_equal.
+      + right. intros H. now tm_injection H.
+    - destruct (IHx1 y1), (IHx2 y2); subst; try (now left); right;
+        intros N; tm_injection N; congruence.
+    - destruct (IHx y), (decide (T = T0)); subst; try (now left); right;
+        intros N; tm_injection N; congruence.
+    - now apply tm_eq_dec_other.
+  Qed.
 
 
   (**************)
@@ -328,18 +349,6 @@ Module StlcTheories (Stlc : STLC).
   Ltac2 mutable htg_list () := [htg_lvl; htg_app; htg_abs1; htg_other].
   Ltac2 has_type_goal () := first0 (htg_list ()).
 
-  (*
-  Ltac2 has_type_goal () :=
-  Ltac2 mutable has_type_goal () :=
-    lazy_match! (Control.goal ()) with
-    | has_type _ (tm_lvl _) _ => apply has_type_lvl
-    | has_type _ (tm_app _ _) _ => apply has_type_app
-    | has_type _ (tm_abs _ _) (ty_arr _ _) => apply ht_abs; subst
-    | has_type _ (tm_abs _ _) _ => apply has_type_abs; subst
-    | has_type _ _ _ => apply has_type_other > [assumption|]; reflexivity
-    end.
-  *)
-
   Ltac2 has_type h := i_iter ht_first [h].
   Ltac2 Notation "has_type" "in" h(ident) := has_type h.
   Ltac2 Notation "has_type" :=
@@ -357,27 +366,6 @@ Module StlcTheories (Stlc : STLC).
     - eapply IHt1 in Hs0 > [|apply Hs]. now (ty_injection Hs0).
     - f_equal. eauto.
   Qed.
-
-  (*
-  Ltac has_type_unique :=
-    match goal with
-      [H1 : has_type ?C ?t _, H2 : has_type ?C ?t _ |- _] => generalize (has_type_unique _ _ H1 H2); let x := fresh "H" in intros x; ty_injection x
-    end.
-
-  Ltac has_type_other :=
-    match goal with
-      [H : has_type ?C ?t ?T |- _] => apply has_type_other in H; [|reflexivity]; ty_injection H
-    end.
-
-  Tactic Notation "has_type" "in" ident(H) :=
-    match type of H with
-    | has_type _ (tm_app _ _) _ => apply has_type_app in H as []; try has_type_unique; try has_type_other
-    | has_type _ (tm_abs _ _) _ => apply has_type_abs2 in H
-    end; ty_simpl in H.
-
-  Tactic Notation "has_type" :=
-    repeat match goal with [H : has_type ?C ?t ?T |- _] => has_type in H end.
-    *)
 
 
   (**************************)
@@ -551,14 +539,6 @@ Module StlcTheories (Stlc : STLC).
 
   Ltac2 htg_lift () := refine '(has_type_lift1 _).
   Ltac2 Set htg_list as old := fun () => List.append (old ()) [htg_lift].
-  (*
-  Ltac2 Set has_type_goal as old := fun () =>
-    Control.plus old ( fun _ =>
-      lazy_match! (Control.goal ()) with
-      | has_type (?_c +: _) (lift (rl_length ?_c) _) _ => apply has_type_lift1
-      end
-    ).
-    *)
 
 
   (********************)

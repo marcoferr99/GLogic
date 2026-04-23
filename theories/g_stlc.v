@@ -69,11 +69,18 @@ Module GStlc <: STLC.
     | gtm_nom T n => T
     | _ => ty_prp
     end.
+
+  Definition tm_eq_dec_other a b :
+    tm_other a -> tm_other b -> Decision (a = b).
+  Proof. ltac1:(solve_decision). Qed.
 End GStlc.
 
 Module GStlcTheories.
   Module StlcTheories := StlcTheories GStlc.
   Export StlcTheories.
+
+
+  Coercion gtm_lvl : nat >-> gtm.
 
   (** Notations *)
   Notation "<{ x }>" := x (x custom stlc_tm at level 200) : stlc_scope.
@@ -83,6 +90,11 @@ Module GStlcTheories.
     (in custom stlc_tm at level 0, t custom stlc_tm) : stlc_scope.
   Notation "$( x )" := x
     (in custom stlc_tm at level 0, x constr, only parsing) : stlc_scope.
+  Notation "x y" := (tm_app x y)
+    (in custom stlc_tm at level 10, left associativity) : stlc_scope.
+  Notation "\: A , t" := (tm_abs A t)
+    (in custom stlc_tm at level 200, A custom stlc_ty,
+      t custom stlc_tm at level 200, left associativity) : stlc_scope.
   Notation "⊥" := gtm_bot (in custom stlc_tm) : stlc_scope.
   Notation "x \/ y" := (tm_app (tm_app gtm_or x) y)
     (in custom stlc_tm at level 60, left associativity) : stlc_scope.
@@ -104,6 +116,7 @@ Module GStlcTheories.
       t custom stlc_tm at level 200, left associativity) : stlc_scope.
   Notation "B ≡ C" := (<{(B > C) /\ (C > B)}>) (in custom stlc_tm at level 80) : stlc_scope.
   Notation "~ B" := <{ B > gtm_bot }> (in custom stlc_tm at level 75) : stlc_scope.
+  Notation "n ^ T" := (gtm_nom T n) (in custom stlc_tm at level 200) : stlc_scope.
 
 
   (**************************************)
@@ -118,6 +131,7 @@ Module GStlcTheories.
     | _ => False
     end.
 
+  (** Replace nominal variables with other nominal variables of the same type *)
   Fixpoint nom_map (f : ty -> nat -> nat) t : tm :=
     match t with
     | gtm_nom T a => gtm_nom T (f T a)
@@ -299,6 +313,13 @@ Module GStlcTheories.
   Theorem nom_fresh_in_supp t T : ~ in_supp t (gtm_nom T (nom_fresh t)).
   Proof. now apply nom_fresh_le_in_supp. Qed.
 
+  Theorem nom_in_supp b T : exists a, ~ in_supp b (gtm_nom T a).
+  Proof. eexists. apply nom_fresh_in_supp. Qed.
+
+  Theorem in_supp_not B n :
+    in_supp <{ ~ B }> n <-> in_supp B n.
+  Proof. unfold in_supp. simpl. intuition. Qed.
+
 
   (************************)
   (** ** Term equivalence *)
@@ -331,129 +352,57 @@ Module GStlcTheories.
       now apply lambda_equiv_nom_map.
   Qed.
 
-  (*
-  Definition nom_swap (T : ty) (n m : nat) A a :=
-    if (decide (A = T)) then (
-      if (decide (a = n)) then m else (
-        if (decide (a = m)) then n else a
-      )
-    ) else a.
 
-  Theorem nom_swap_eq T n m : nom_swap T n m T n = m.
+  (***************************)
+  (** ** Nominal Abstraction *)
+  (***************************)
+
+
+  (** Replace the nominal variable [gtm_nom A n] with a variable binding *)
+  Definition nom_bind m n t : tm :=
+    tm_abs (type_check_other n) ((fix fx t := match t with
+    | gtm_nom _ _ => if decide (t = n) then tm_lvl m else t
+    | gtm_abs T t => gtm_abs T (fx t)
+    | gtm_app s t => gtm_app (fx s) (fx t)
+    | x => x
+    end) (lift m t)).
+
+  Definition nom_binds m (l : list tm) t : tm :=
+    fold_right (nom_bind m) t l.
+
+  Definition nominal_abstraction m s t : Prop :=
+    exists l, lambda_equiv m s (nom_binds m l t).
+
+  Example nominal_abstraction_ex1 m T n :
+    nominal_abstraction m (tm_abs T m) (gtm_nom T n).
   Proof.
-    unfold nom_swap. now repeat rewrite decide_True.
+    exists [gtm_nom T n].
+    simpl. unfold nom_bind. simpl.
+    rewrite (decide_True); reflexivity.
   Qed.
 
-  Theorem nom_swap_neq T n m A x :
-    x <> n -> x <> m -> nom_swap T n m A x = x.
+  Example nominal_abstraction_ex2 m a A b B :
+    <{a^A}> <> <{b^B}> ->
+    nominal_abstraction m <{\: A, m (b^B)}> <{(a^A) (b^B)}>.
   Proof.
-    intros. unfold nom_swap. destruct (decide (A = T)); [|reflexivity].
-    now repeat rewrite decide_False.
+    exists [gtm_nom A a].
+    simpl. unfold nom_bind. simpl.
+    rewrite (decide_True) by reflexivity.
+    now rewrite (decide_False).
   Qed.
 
-  Hint Rewrite nom_swap_eq : tm.
-
-  Theorem in_supp_nom_map f t :
-    (forall T n, in_supp t (gtm_nom T n) -> f T n = n) ->
-    nom_map f t = t.
+  Example nominal_abstraction_ex3 m a A b B :
+    <{a^A}> <> <{b^B}> ->
+    nominal_abstraction m <{\: A, \: B, m $(S m)}> <{(a^A) (b^B)}>.
   Proof.
-    intros H. induction t; simpl in *; try reflexivity.
-    - rewrite IHt1, IHt2; try reflexivity.
-      + intros. apply H. unfold in_supp in *. simpl. intuition.
-      + intros. apply H. unfold in_supp in *. simpl. intuition.
-    - rewrite IHt; [reflexivity|].
-      intros. auto.
-    - f_equal. now apply H.
+    exists [gtm_nom A a; gtm_nom B b].
+    simpl. unfold nom_bind. simpl.
+    rewrite (decide_False) by easy.
+    rewrite (decide_True) by reflexivity.
+    simpl.
+    rewrite (decide_True) by reflexivity.
+    rewrite (decide_True) by reflexivity.
+    reflexivity.
   Qed.
 
-  Theorem in_supp_nom_swap T m n t :
-    ~ in_supp t (gtm_nom T n) -> ~ in_supp t (gtm_nom T m) ->
-    nom_map (nom_swap T m n) t = t.
-  Proof.
-    intros. apply in_supp_nom_map. intros.
-    destruct (decide (T = T0)).
-    - subst. apply nom_swap_neq; intros N; subst; contradiction.
-    - unfold nom_swap. now rewrite decide_False.
-  Qed.
-
-  Theorem nom_swap_tm_equiv m T x y a b :
-    lambda_equiv m a (nom_map (nom_swap T x y) b) -> tm_equiv m a b.
-  Proof.
-    intros LE.
-    apply (tm_equiv_intro (nom_swap T x y) (nom_swap T y x)); try assumption.
-    - intros X t. unfold nom_swap.
-      destruct (decide (X = T)); [|reflexivity].
-      destruct (decide (t = x)), (decide (t = y)), (decide (x = y)); subst;
-        try (now rewrite decide_True).
-      + reflexivity.
-      + now repeat rewrite decide_False.
-      + now repeat rewrite decide_False.
-    - intros X t. unfold nom_swap.
-      destruct (decide (X = T)); [|reflexivity].
-      destruct (decide (t = x)), (decide (t = y)), (decide (y = x)); subst;
-        try (now rewrite decide_True).
-      + reflexivity.
-      + now repeat rewrite decide_False.
-      + now repeat rewrite decide_False.
-  Qed.
-  *)
-
-  (*
-  Theorem has_type_tm_equiv (C : context) T a b : tm_equiv C a b ->
-    has_type C a T -> has_type C b T.
-  Proof.
-    intros TE HT. induction TE.
-    eapply has_type_nom_map.
-    eapply has_type_lambda_equiv; eassumption.
-  Qed.
-  *)
-
-
-  (*
-  Theorem subst_gtm_bot n l : subst n l gtm_bot = gtm_bot.
-  Proof. now tm_simpl. Qed.
-
-  Theorem subst_last_gtm_bot m n s : subst_last m n s gtm_bot = gtm_bot.
-  Proof. now tm_simpl. Qed.
-
-  Hint Rewrite subst_gtm_bot subst_last_gtm_bot : tm.
-  *)
 End GStlcTheories.
-
-
-(*
-(****************)
-(** ** Examples *)
-(****************)
-
-Module StlcChurch.
-  Module GStlc := GStlc.
-  Import GStlc.
-  Import TyChurchTheories.
-
-  (** Terms *)
-  Check <{ \: i, 0 }>.
-  Check <{ (\: (i -> o), 2) 1 }>.
-  Check <{ \: o, 3 _| }>.
-
-  (** Typing *)
-  Compute type_check [-[ i -> o ]-; tyc_obj] <{ 0 1 }>.
-
-  (** Substitution *)
-  Compute subst 1 [<{ \: i, 1 }>; tm_lvl 0] <{ \: o, 1 0 }>.
-  Compute subst 2 [<{ \: i, 1 }>; tm_lvl 0] <{ \: o, 1 0 }>.
-  Compute subst 2 [<{ \: i, 0 1 }>] <{ \: o, 0 }>.
-  Compute subst 1 [<{ \: i, 0 1 }>] <{ \: o, 0 }>.
-  Compute subst 0 [<{ \: i, 0 0 }>] <{ \: o, 0 }>.
-  Compute subst 4 [tm_lvl 0; <{ \: i, 5 }>; tm_lvl 2] <{ 1 2 }>.
-  Compute subst 2 [tm_lvl 0; <{ \: i, 1 2 }>] <{ \: o, 1 }>.
-  Compute subst 0 [tm_lvl 0; tm_lvl 1; <{ \: i, 0 0 }>] <{ \: o, \: i, 2 2 }>.
-  Compute subst 0 [ tm_top ] <{ \: o, 1 }>.
-  Compute subst_last 1 tm_bot <{ \: o, 1 }>.
-
-  (** Reduction *)
-  Compute beta_reduction 1 <{ (\: o, 1) 0 }>.
-  Compute beta_reduction 0 <{ (\: o -> o, 0) (\: o, 0) }>.
-  Compute beta_reduction 0 <{ (\: o -> o, 0) ((\: o -> o, 0) (\: o, 0)) }>.
-End StlcChurch.
-*)
