@@ -73,7 +73,8 @@ Ltac2 rec c_first (f : 'b -> 'a) (l : 'b list) : 'a :=
 Ltac2 rec c_injection (l : (unit -> constr) list) (e : constr) : unit :=
   let a := c_first (fun f => let fc := f () in '($fc $e)) l in
   List.iter (fun x =>
-    Control.plus (fun () => c_injection l x) (fun _ => try (rewrite $x in *))
+    Control.plus (fun () => c_injection l x) (fun _ => try (rewrite $x in *));
+    let e := Fresh.in_goal @E in assert ($e := $x)
   ) (and_unfold a).
 
 (*

@@ -8,6 +8,7 @@ Module GStlc <: STLC.
   Module TyTheories := TyTheories Ty.
   Export TyTheories.
 
+
   Inductive gtm : Set :=
     | gtm_lvl : nat -> gtm
     | gtm_app : gtm -> gtm -> gtm
@@ -20,7 +21,8 @@ Module GStlc <: STLC.
     | gtm_for : ty -> gtm
     | gtm_ex  : ty -> gtm
     | gtm_nab : ty -> gtm
-    | gtm_nom : ty -> nat -> gtm.
+    | gtm_nom : ty -> nat -> gtm
+    | gtm_prd : list ty -> nat -> gtm.
 
   Definition tm := gtm.
   Definition tm_lvl := gtm_lvl.
@@ -36,7 +38,7 @@ Module GStlc <: STLC.
     end.
 
   Definition tm_rect (P : gtm -> Type) l a b (o : forall t (O : tm_other t), P t) : forall t, P t :=
-    gtm_rect P l a b (o gtm_bot I) (o gtm_top I) (o gtm_and I) (o gtm_or I) (o gtm_imp I) (fun t => o (gtm_for t) I) (fun t => o (gtm_ex t) I) (fun t => o (gtm_nab t) I) (fun t n => o (gtm_nom t n) I).
+    gtm_rect P l a b (o gtm_bot I) (o gtm_top I) (o gtm_and I) (o gtm_or I) (o gtm_imp I) (fun t => o (gtm_for t) I) (fun t => o (gtm_ex t) I) (fun t => o (gtm_nab t) I) (fun t n => o (gtm_nom t n) I) (fun l n => o (gtm_prd l n) I).
 
   Theorem tm_rect_lvl : forall P l a b o n, tm_rect P l a b o (tm_lvl n) = l n.
   Proof. reflexivity. Qed.
@@ -67,6 +69,7 @@ Module GStlc <: STLC.
     | gtm_or  => -[ o -> o -> o ]-
     | gtm_imp => -[ o -> o -> o ]-
     | gtm_nom T n => T
+    | gtm_prd l n => foldr ty_arr ty_prp l
     | _ => ty_prp
     end.
 
@@ -74,6 +77,7 @@ Module GStlc <: STLC.
     tm_other a -> tm_other b -> Decision (a = b).
   Proof. ltac1:(solve_decision). Qed.
 End GStlc.
+
 
 Module GStlcTheories.
   Module StlcTheories := StlcTheories GStlc.
@@ -231,14 +235,14 @@ Module GStlcTheories.
     nom_map f (subst m l t) = subst m (nom_map f <$> l) (nom_map f t).
   Proof.
     revert m l.
-    induction t; intros m l; try easy; tm_simpl; gnorm; tm_simpl.
-    - unfold lookup_default. simpl. destruct (decide (n < l)).
+    induction t; intros m h; try easy; tm_simpl; gnorm; tm_simpl.
+    - unfold lookup_default. simpl. destruct (decide (n < h)).
       + now rewrite decide_True.
       + now rewrite decide_False.
     - now f_equal.
     - rewrite IHt. f_equal. apply subst_Proper > [|reflexivity].
       constructor > [reflexivity|].
-      intros n Hn. simpl in *. destruct (decide (n < l)).
+      intros n Hn. simpl in *. destruct (decide (n < h)).
       + rewrite decide_True > [|easy]. symmetry. apply level_map_nom_map.
       + rewrite decide_False; easy.
   Qed.
@@ -404,5 +408,4 @@ Module GStlcTheories.
     rewrite (decide_True) by reflexivity.
     reflexivity.
   Qed.
-
 End GStlcTheories.

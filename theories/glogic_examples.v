@@ -1,4 +1,5 @@
 Require Export glogic.
+Export GLogic.
 
 Theorem example1 C l T B :
   [{ C ; l --> (∇ T, ~ B) ≡ ~ (∇ T, B) }].

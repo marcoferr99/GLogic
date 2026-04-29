@@ -1,5 +1,4 @@
 Require Export stlc_types.
-From stdpp Require Export relations.
 
 
 (***********************************)
@@ -332,7 +331,8 @@ Module StlcTheories (Stlc : STLC).
     end.
     *)
 
-  Ltac2 ht_first := fun x => c_first (fun f => f x) [ht_lvl; ht_app; ht_abs1; ht_abs2; ht_other].
+  Ltac2 mutable ht_list () := [ht_lvl; ht_app; ht_abs1; ht_abs2; ht_other].
+  Ltac2 ht_first := fun x => c_first (fun f => f x) (ht_list ()).
 
 
   Ltac2 htg_lvl () := refine '(proj2 has_type_lvl _).
@@ -355,7 +355,7 @@ Module StlcTheories (Stlc : STLC).
     Control.enter (fun () => all_hyps (fun h => try (has_type h)); repeat (has_type_goal ())).
 
 
-  (** *** Other typing lemmas *)
+  (** *** Other typing lemmas and tactics *)
 
   Theorem has_type_unique {A B} C t :
     has_type C t A -> has_type C t B -> A = B.
@@ -366,6 +366,36 @@ Module StlcTheories (Stlc : STLC).
     - eapply IHt1 in Hs0 > [|apply Hs]. now (ty_injection Hs0).
     - f_equal. eauto.
   Qed.
+
+  Theorem has_type_fold_app {C t T l} :
+    has_type C (foldl tm_app t l) T <->
+    exists2 L, has_type C t (foldr ty_arr T L) &
+      Forall2 (fun x X => has_type C x X) l L.
+  Proof.
+    split.
+    - revert t. induction l; intros t H; simpl in *; has_type.
+      + now exists [].
+      + apply IHl in H. destruct H. has_type.
+        rewrite <- foldr_cons in Hs. eexists > [eassumption|].
+        now constructor.
+    - revert t.
+      induction l; intros t H; simpl in *; has_type; destruct H as [L H F].
+      + inversion F. now subst.
+      + inversion F. subst.
+        apply IHl. eexists.
+        * has_type_goal (). eexists; eassumption.
+        * assumption.
+  Qed.
+
+  Ltac2 ht_fold_app h :=
+    let c := Control.hyp h in
+    let ht := Fresh.in_goal @Ht in let f := Fresh.in_goal @F in
+    destruct (proj1 has_type_fold_app $c) as [? $ht $f]; [ht].
+
+  Ltac2 Set ht_list as old := fun () => List.append (old ()) [ht_fold_app].
+
+  Ltac2 htg_fold_app () := refine '(proj2 has_type_fold_app _).
+  Ltac2 Set htg_list as old := fun () => List.append (old ()) [htg_fold_app].
 
 
   (**************************)
