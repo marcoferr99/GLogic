@@ -40,9 +40,12 @@ Module tm_set : TM_SET.
 End tm_set.
 
 
+Inductive def_type : Set :=
+  | std_type | ind_type | cin_type.
+
 Module Type CLAUSES.
-  Parameter clause_f : list ty -> nat -> option gtm.
-  Axiom clause_f_spec : forall C l n B, clause_f l n = Some B ->
+  Parameter clause_f : list ty -> nat -> def_type -> option gtm.
+  Axiom clause_f_spec : forall C l n t B, clause_f l n t = Some B ->
     let T := type_check_other (gtm_prd l n) in
     has_type C B (ty_arr T T).
 End CLAUSES.
@@ -69,22 +72,22 @@ Module GLogic.
   (** ** Clauses *)
   (***************)
 
-  Theorem has_type_clause {L n B C T} :
-    clause_f L n = Some B ->
+  Theorem has_type_clause {L n t B C T} :
+    clause_f L n t = Some B ->
     has_type C B T <->
     let X := type_check_other (gtm_prd L n) in
     T = ty_arr X X.
   Proof.
     split; intros.
     - eapply has_type_unique > [eassumption|].
-      now apply clause_f_spec.
+      eapply clause_f_spec. eassumption.
     - simpl in *. subst. eapply clause_f_spec. eassumption.
   Qed.
 
   Ltac2 ht_clause h :=
     let c := Control.hyp h in
     match! goal with
-    | [ o : clause_f _ _ = Some _ |- _ ] =>
+    | [ o : clause_f _ _ _ = Some _ |- _ ] =>
       let oc := Control.hyp o in let a := Fresh.in_goal @H in
         assert ($a := proj1 (has_type_clause $oc) $c); simpl in $a; try (ty_injection $a); []
     end.
@@ -93,7 +96,7 @@ Module GLogic.
 
   Ltac2 htg_clause () :=
     match! goal with
-    | [ o : clause_f _ _ = Some _ |- _ ] =>
+    | [ o : clause_f _ _ _ = Some _ |- _ ] =>
         let oc := Control.hyp o in
         refine '(proj2 (has_type_clause $oc) _); try reflexivity
     end.
@@ -200,16 +203,24 @@ Module GLogic.
     | wrl_nabR {T b} n (_ : ~ in_supp b (gtm_nom T n)) C l :
         is_derivable_wf C l (subst_last C C (gtm_nom T n) b) ->
         is_derivable_wf C l (<{nab T, b}>)
-    | wrl_defL C l L n B c t :
+    | wrl_defL C l L n x B c t :
         let p := gtm_prd L n in
-        clause_f L n = Some B ->
+        clause_f L n x = Some B ->
         is_derivable_wf C (l +; foldl tm_app <{B p}> t) c ->
         is_derivable_wf C (l +; foldl tm_app p t) c
-    | wrl_defR C l L n B t :
+    | wrl_defR C l L n x B t :
         let p := gtm_prd L n in
-        clause_f L n = Some B ->
+        clause_f L n x = Some B ->
         is_derivable_wf C l (foldl tm_app <{B p}> t) ->
         is_derivable_wf C l (foldl tm_app p t)
+        (*
+    | wrl_iL C l L n B s t c x :
+        let p := gtm_prd L n in
+        clause_f L n ind_type = Some B ->
+        is_derivable_wf x {[foldl tm_app <{B s}> t]} (foldl tm_app s x) ->
+        is_derivable_wf C (l +; foldl tm_app s t) c ->
+        is_derivable_wf C (l +; foldl tm_app p t) c
+        *)
   .
 
   Inductive is_derivable : context -> tm_set -> tm -> Prop :=
@@ -286,14 +297,14 @@ Module GLogic.
     | rl_nabR {T b} n (_ : ~ in_supp b (gtm_nom T n)) C l :
         is_derivable C l (subst_last C C (gtm_nom T n) b) ->
         is_derivable C l (<{nab T, b}>)
-    | rl_defL C l L n B c t :
+    | rl_defL C l L n x B c t :
         let p := gtm_prd L n in
-        clause_f L n = Some B ->
+        clause_f L n x = Some B ->
         is_derivable C (l +; foldl tm_app <{B p}> t) c ->
         is_derivable C (l +; foldl tm_app p t) c
-    | rl_defR C l L n B t :
+    | rl_defR C l L n x B t :
         let p := gtm_prd L n in
-        clause_f L n = Some B ->
+        clause_f L n x = Some B ->
         is_derivable C l (foldl tm_app <{B p}> t) ->
         is_derivable C l (foldl tm_app p t)
   .
@@ -521,11 +532,11 @@ Module GLogic.
       assert (is_form C (foldl tm_app <{ B p }> t)) by auto.
       has_type.
       exists L > [assumption|].
-      ltac1:(replace L with x) > [assumption|].
+      ltac1:(replace L with x0) > [assumption|].
       eapply foldr_ty_arr_inj. eassumption.
     - set_unfold. intuition.
       has_type. exists L > [assumption|].
-      ltac1:(replace L with x) > [assumption|].
+      ltac1:(replace L with x0) > [assumption|].
       eapply foldr_ty_arr_inj. eassumption.
   Qed.
 
@@ -678,14 +689,14 @@ Module GLogic.
       has_type. exists L.
       + has_type_goal (). eexists > [|eassumption].
         has_type_goal ().
-      + ltac1:(replace L with x) > [assumption|].
+      + ltac1:(replace L with x0) > [assumption|].
         eapply foldr_ty_arr_inj. eassumption.
     - eapply wrl_defR > [eassumption|].
       apply IHD; intuition.
       has_type. exists L.
       + has_type_goal (). eexists > [|eassumption].
         has_type_goal ().
-      + ltac1:(replace L with x) > [assumption|].
+      + ltac1:(replace L with x0) > [assumption|].
         eapply foldr_ty_arr_inj. eassumption.
   Qed.
 
