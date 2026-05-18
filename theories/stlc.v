@@ -206,6 +206,11 @@ Module StlcTheories (Stlc : STLC).
   Qed.
 
 
+  (** *** Other *)
+
+  Definition lvl_seq n m := map tm_lvl (seq n m).
+
+
   (**************)
   (** ** Typing *)
   (**************)
@@ -277,6 +282,29 @@ Module StlcTheories (Stlc : STLC).
     tm_other t -> has_type c t T ->
     T = type_check_other t.
   Proof. apply has_type_other. Qed.
+
+  Theorem has_type_lvl_seq_g L X :
+    Forall2 (has_type (list_to_rlist (L ++ X))) (lvl_seq 0 (length L)) L.
+  Proof.
+    revert X. induction L using rev_ind > [constructor|].
+    intros X.
+    unfold lvl_seq in *.
+    rewrite length_app. simpl.
+    rewrite Nat.add_1_r, seq_S, map_app.
+    apply Forall2_app.
+    - rewrite <- app_assoc. apply IHL.
+    - simpl. constructor > [|constructor].
+      apply has_type_lvl. simpl. split.
+      + repeat (rewrite length_app). simpl. lia.
+      + rewrite <- app_assoc. simpl.
+        now apply list_lookup_total_middle.
+  Qed.
+
+  Theorem has_type_lvl_seq L :
+    Forall2 (has_type (list_to_rlist L)) (lvl_seq 0 (length L)) L.
+  Proof.
+    rewrite <- (app_nil_r L) at 1. apply has_type_lvl_seq_g.
+  Qed.
 
 
   (** *** Typing tactics *)
@@ -370,7 +398,7 @@ Module StlcTheories (Stlc : STLC).
   Theorem has_type_fold_app {C t T l} :
     has_type C (foldl tm_app t l) T <->
     exists2 L, has_type C t (foldr ty_arr T L) &
-      Forall2 (fun x X => has_type C x X) l L.
+      Forall2 (has_type C) l L.
   Proof.
     split.
     - revert t. induction l; intros t H; simpl in *; has_type.

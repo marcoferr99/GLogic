@@ -1,5 +1,5 @@
 From stdpp Require Export decidable.
-From stdpp Require Import numbers.
+From stdpp Require Import list numbers.
 
 
 Record rlist (A : Type) : Type := {
@@ -63,3 +63,7 @@ Proof.
   intros ? ? [H ?] ? ? ->. constructor; simpl; [congruence|].
   intros. rewrite H in *. destruct (decide (n < y)); auto.
 Qed.
+
+
+Definition list_to_rlist {A} `{Inhabited A} (l : list A) :=
+  Build_rlist (length l) (fun n => l !!! n).

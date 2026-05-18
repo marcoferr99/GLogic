@@ -41,11 +41,11 @@ End tm_set.
 
 
 Inductive def_type : Set :=
-  | std_type | ind_type | cin_type.
+  | def_std | def_ind | def_cin.
 
 Module Type CLAUSES.
-  Parameter clause_f : list ty -> nat -> def_type -> option gtm.
-  Axiom clause_f_spec : forall C l n t B, clause_f l n t = Some B ->
+  Parameter clause_f : list ty -> nat -> option (prod def_type gtm).
+  Axiom clause_f_spec : forall C l n t B, clause_f l n = Some (t, B) ->
     let T := type_check_other (gtm_prd l n) in
     has_type C B (ty_arr T T).
 End CLAUSES.
@@ -68,12 +68,13 @@ Module GLogic.
     unfold wf_sequent, wf_tm_set. intuition; set_solver.
   Qed.
 
+
   (***************)
   (** ** Clauses *)
   (***************)
 
   Theorem has_type_clause {L n t B C T} :
-    clause_f L n t = Some B ->
+    clause_f L n = Some (t, B) ->
     has_type C B T <->
     let X := type_check_other (gtm_prd L n) in
     T = ty_arr X X.
@@ -84,10 +85,22 @@ Module GLogic.
     - simpl in *. subst. eapply clause_f_spec. eassumption.
   Qed.
 
+  Theorem has_type_clause_app {L n t B C x} :
+    let p := gtm_prd L n in
+    clause_f L n = Some (x, B) ->
+    Forall2 (has_type C) t L ->
+    is_form C (foldl tm_app <{ B p }> t).
+  Proof.
+    intros. has_type. exists L > [|assumption].
+    has_type_goal (). eexists > [|now constructor].
+    eapply has_type_clause > [eassumption|].
+    intros. reflexivity.
+  Qed.
+
   Ltac2 ht_clause h :=
     let c := Control.hyp h in
     match! goal with
-    | [ o : clause_f _ _ _ = Some _ |- _ ] =>
+    | [ o : clause_f _ _ = Some _ |- _ ] =>
       let oc := Control.hyp o in let a := Fresh.in_goal @H in
         assert ($a := proj1 (has_type_clause $oc) $c); simpl in $a; try (ty_injection $a); []
     end.
@@ -96,12 +109,19 @@ Module GLogic.
 
   Ltac2 htg_clause () :=
     match! goal with
-    | [ o : clause_f _ _ _ = Some _ |- _ ] =>
+    | [ o : clause_f _ _ = Some _ |- _ ] =>
         let oc := Control.hyp o in
         refine '(proj2 (has_type_clause $oc) _); try reflexivity
     end.
 
-  Ltac2 Set htg_list as old := fun () => List.append (old ()) [htg_clause].
+  Ltac2 htg_clause_app () :=
+    match! goal with
+    | [ o : clause_f _ _ = Some _ |- _ ] =>
+        let oc := Control.hyp o in
+        refine '(has_type_clause_app $oc _)
+    end.
+
+  Ltac2 Set htg_list as old := fun () => List.append [htg_clause; htg_clause_app] (old ()).
 
 
   (***********************)
@@ -205,22 +225,30 @@ Module GLogic.
         is_derivable_wf C l (<{nab T, b}>)
     | wrl_defL C l L n x B c t :
         let p := gtm_prd L n in
-        clause_f L n x = Some B ->
+        clause_f L n = Some (x, B) ->
         is_derivable_wf C (l +; foldl tm_app <{B p}> t) c ->
         is_derivable_wf C (l +; foldl tm_app p t) c
     | wrl_defR C l L n x B t :
         let p := gtm_prd L n in
-        clause_f L n x = Some B ->
+        clause_f L n = Some (x, B) ->
         is_derivable_wf C l (foldl tm_app <{B p}> t) ->
         is_derivable_wf C l (foldl tm_app p t)
-        (*
-    | wrl_iL C l L n B s t c x :
+    | wrl_iL C l L n B s t c :
         let p := gtm_prd L n in
-        clause_f L n ind_type = Some B ->
-        is_derivable_wf x {[foldl tm_app <{B s}> t]} (foldl tm_app s x) ->
+        clause_f L n = Some (def_ind, B) ->
+        (forall D, has_type D s (foldr ty_arr ty_prp L)) ->
+        let x := (map tm_lvl (seq 0 (length L))) in
+        is_derivable_wf (list_to_rlist L) {[foldl tm_app <{B s}> x]} (foldl tm_app s x) ->
         is_derivable_wf C (l +; foldl tm_app s t) c ->
         is_derivable_wf C (l +; foldl tm_app p t) c
-        *)
+    | wrl_ciR C l L n B s t :
+        let p := gtm_prd L n in
+        clause_f L n = Some (def_ind, B) ->
+        (forall D, has_type D s (foldr ty_arr ty_prp L)) ->
+        let x := (map tm_lvl (seq 0 (length L))) in
+        is_derivable_wf (list_to_rlist L) {[foldl tm_app s x]} (foldl tm_app <{B s}> x) ->
+        is_derivable_wf C l (foldl tm_app s t) ->
+        is_derivable_wf C l (foldl tm_app p t)
   .
 
   Inductive is_derivable : context -> tm_set -> tm -> Prop :=
@@ -299,13 +327,29 @@ Module GLogic.
         is_derivable C l (<{nab T, b}>)
     | rl_defL C l L n x B c t :
         let p := gtm_prd L n in
-        clause_f L n x = Some B ->
+        clause_f L n = Some (x, B) ->
         is_derivable C (l +; foldl tm_app <{B p}> t) c ->
         is_derivable C (l +; foldl tm_app p t) c
     | rl_defR C l L n x B t :
         let p := gtm_prd L n in
-        clause_f L n x = Some B ->
+        clause_f L n = Some (x, B) ->
         is_derivable C l (foldl tm_app <{B p}> t) ->
+        is_derivable C l (foldl tm_app p t)
+    | rl_iL C l L n B s t c :
+        let p := gtm_prd L n in
+        clause_f L n = Some (def_ind, B) ->
+        (forall D, has_type D s (foldr ty_arr ty_prp L)) ->
+        let x := (map tm_lvl (seq 0 (length L))) in
+        is_derivable (list_to_rlist L) {[foldl tm_app <{B s}> x]} (foldl tm_app s x) ->
+        is_derivable C (l +; foldl tm_app s t) c ->
+        is_derivable C (l +; foldl tm_app p t) c
+    | rl_ciR C l L n B s t :
+        let p := gtm_prd L n in
+        clause_f L n = Some (def_ind, B) ->
+        (forall D, has_type D s (foldr ty_arr ty_prp L)) ->
+        let x := (map tm_lvl (seq 0 (length L))) in
+        is_derivable (list_to_rlist L) {[foldl tm_app s x]} (foldl tm_app <{B s}> x) ->
+        is_derivable C l (foldl tm_app s t) ->
         is_derivable C l (foldl tm_app p t)
   .
 
@@ -538,6 +582,17 @@ Module GLogic.
       has_type. exists L > [assumption|].
       ltac1:(replace L with x0) > [assumption|].
       eapply foldr_ty_arr_inj. eassumption.
+    - set_unfold. intuition. subst.
+      assert (is_form C (foldl tm_app s t)) by auto.
+      has_type. exists L > [has_type_goal ()|].
+      ltac1:(replace L with x1) > [assumption|].
+      eapply foldr_ty_arr_inj.
+      eapply has_type_unique; eauto.
+    - set_unfold. intuition.
+      has_type. exists L > [has_type_goal ()|].
+      ltac1:(replace L with x2) > [assumption|].
+      eapply foldr_ty_arr_inj.
+      eapply has_type_unique; eauto.
   Qed.
 
   Theorem rl_wL C l m c :
@@ -580,6 +635,9 @@ Module GLogic.
     - eapply rl_defL > [eassumption|].
       now rewrite <- union_assoc.
     - eapply rl_defR; eauto.
+    - eapply rl_iL; eauto.
+      now rewrite <- union_assoc.
+    - eapply rl_ciR; eauto.
   Qed.
 
   Theorem is_derivable_wf_is_derivable C l c :
@@ -610,6 +668,8 @@ Module GLogic.
     - eapply rl_nabR; eassumption.
     - eapply rl_defL; eassumption.
     - eapply rl_defR; eassumption.
+    - eapply rl_iL; eassumption.
+    - eapply rl_ciR; eassumption.
   Qed.
 
   Theorem is_derivable_is_derivable_wf C l c :
@@ -685,19 +745,41 @@ Module GLogic.
       + now has_type.
     - eapply wrl_defL > [eassumption|].
       apply IHD; intuition. subst.
-      assert (is_form C (foldl tm_app p t)) by auto.
-      has_type. exists L.
-      + has_type_goal (). eexists > [|eassumption].
-        has_type_goal ().
-      + ltac1:(replace L with x0) > [assumption|].
-        eapply foldr_ty_arr_inj. eassumption.
+      assert (is_form C (foldl tm_app p t)) by auto. has_type.
+      ltac1:(replace L with x0) > [assumption|].
+      eapply foldr_ty_arr_inj. eassumption.
     - eapply wrl_defR > [eassumption|].
-      apply IHD; intuition.
-      has_type. exists L.
-      + has_type_goal (). eexists > [|eassumption].
-        has_type_goal ().
-      + ltac1:(replace L with x0) > [assumption|].
-        eapply foldr_ty_arr_inj. eassumption.
+      apply IHD; intuition. has_type.
+      ltac1:(replace L with x0) > [assumption|].
+      eapply foldr_ty_arr_inj. eassumption.
+    - eapply wrl_iL; try eassumption.
+      + apply IHD1.
+        * intros. subst.
+          has_type. exists L.
+          -- has_type_goal (). eexists > [has_type_goal ()|].
+             apply H2.
+          -- subst x. apply has_type_lvl_seq.
+        * has_type. exists L > [apply H2|].
+          subst x. apply has_type_lvl_seq.
+      + apply IHD2 > [|assumption].
+        intuition. subst. has_type.
+        exists L > [apply H2|].
+        assert (is_form C (foldl tm_app p t)) by auto.
+        has_type.
+        apply foldr_ty_arr_inj in H4. congruence.
+    - eapply wrl_ciR; try eassumption.
+      + apply IHD1.
+        * intros. subst.
+          has_type. exists L > [apply H2|].
+          subst x. apply has_type_lvl_seq.
+        * has_type. exists L.
+          -- has_type_goal (). eexists > [has_type_goal ()|].
+             apply H2.
+          -- subst x. apply has_type_lvl_seq.
+      + apply IHD2 > [assumption|].
+        has_type.
+        exists L > [apply H2|].
+        apply foldr_ty_arr_inj in H3. congruence.
   Qed.
 
 
