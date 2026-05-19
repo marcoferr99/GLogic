@@ -336,6 +336,13 @@ Module GStlcTheories.
       tm_equiv m a b.
   Arguments tm_equiv_intro {m a b}.
 
+  Theorem tm_equiv_id m a b : lambda_equiv m a b -> tm_equiv m a b.
+  Proof.
+    intros * L.
+    apply (tm_equiv_intro (fun _ x => x) (fun _ x => x)); try reflexivity.
+    now tm_simpl.
+  Qed.
+
   Instance tm_equiv_equivalence m : Equivalence (tm_equiv m).
   Proof.
     constructor; intros a.
