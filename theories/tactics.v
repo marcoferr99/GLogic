@@ -2,6 +2,10 @@ Require Export base.
 From Stdlib Require Import Lia.
 
 
+(** General purpose tactics used throughout this project *)
+
+(** Equivalent to [simpl], but with an [Std.clause] as argument allowing for
+    more control *)
 Ltac2 s_simpl (c : Std.clause) : unit := Std.simpl {
     Std.rStrength := Std.Norm;
     Std.rBeta := true;
@@ -15,12 +19,17 @@ Ltac2 s_simpl (c : Std.clause) : unit := Std.simpl {
   None
   c.
 
+(** Apply the tactic [t] to all hypothesis in the context *)
 Ltac2 all_hyps (t : ident -> unit) : unit :=
   List.iter (fun (x, _, _) => t x) (Control.hyps ()).
 
+(** Apply the tactic [t] to the first hypothesis in the context for which [t]
+    succeds *)
 Ltac2 first_hyp (t : ident -> unit) : unit :=
   match! goal with | [h : _ |- _] => t h end.
 
+(** Equivalent to [ltac1] [autorewrite], but taking an [Std.clause] as argument
+    *)
 Ltac2 autorewrite (dt : ident) (c : Std.clause) : unit :=
   let f x := ltac1:(dt x |- autorewrite with dt in x)
     (Ltac1.of_ident dt) (Ltac1.of_ident x) in
@@ -33,12 +42,14 @@ Ltac2 autorewrite (dt : ident) (c : Std.clause) : unit :=
   | _ => ()
   end.
 
+(** Import some tactics from [ltac1] *)
 Ltac2 Notation "easy" := ltac1:(easy).
 Ltac2 Notation easy := easy.
 Ltac2 Notation "lia" := ltac1:(lia).
 Ltac2 Notation lia := lia.
 Ltac2 Notation "intuition" := ltac1:(intuition).
 
+(** Simple ways of constructing [Std.clause] terms *)
 Ltac2 goal : Std.clause := {
     Std.on_hyps := Some [];
     Std.on_concl := Std.AllOccurrences
@@ -64,6 +75,8 @@ Ltac2 rec and_unfold (c : constr) : constr list :=
   | _ => [c]
   end.
 
+(** Returns [f x] where [x] is the first element of the list [l] for which [f x]
+    does not give an error *)
 Ltac2 rec c_first (f : 'b -> 'a) (l : 'b list) : 'a :=
   match l with
   | [] => Control.zero No_value
@@ -86,6 +99,8 @@ Ltac2 rec c_iter (f : 'a -> 'a list) (c : 'a list) : 'a list :=
   end.
 *)
 
+(** Recursively apply [f] to the elements of [l] and to the elements of the
+    lists obtained from those applications *)
 Ltac2 rec i_iter (f : 'a -> 'a list) (l : 'a list) : unit :=
   match l with
   | [] => ()

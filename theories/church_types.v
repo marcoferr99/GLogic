@@ -3,6 +3,9 @@ Require Export stlc_types.
 
 (** * Church Implementation *)
 
+(** An example of implementation of the abstract module defined in [stlc_types]
+    *)
+
 Module TyChurch : TY.
   Inductive tyc : Set :=
     | tyc_prp : tyc

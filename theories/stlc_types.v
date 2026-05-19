@@ -10,8 +10,9 @@ Require Export tactics rlist.
 
 (** ** Interface *)
 
-(** Interface for the types of stlc.  There must be a type for propositions and
-    an arrow type. *)
+(** The theorems proved in this file can be applied to any module that
+    implements this interface, that is to any theory of types that has at least
+    the proposition type and an arrow type *)
 Module Type TY.
   Parameter ty : Set.
   Parameter ty_prp : ty.
@@ -59,7 +60,8 @@ Module TyTheories (Ty : TY).
   Notation "'o'" := ty_prp (in custom stlc_ty at level 0) : stlc_scope.
 
 
-  (** Tactics *)
+  (** *** Tactics *)
+
   Create HintDb ty.
   Hint Rewrite ty_rect_prp ty_rect_arr : ty.
   Hint Rewrite ty_rect_other using assumption : ty.
@@ -69,10 +71,14 @@ Module TyTheories (Ty : TY).
   Ltac2 Notation ty_simpl :=
     rewrite_strat (Strategy.topdown (Strategy.choices (ty_lemmas ()))) None; simpl.
     *)
+
+  (** We use [ty_simpl] to simplify terms of type [ty], since there are no
+      transparent definitions that are simplified with reduction *)
   Ltac2 ty_simpl c := autorewrite @ty c; s_simpl c.
   Ltac2 Notation "ty_simpl" "in" h(ident) := ty_simpl (one_hyp h).
   Ltac2 Notation "ty_simpl" := ty_simpl goal.
   (* Tactic Notation "ty_simpl" "in" "*" := repeat (simpl in *; autorewrite with ty in * ).  *)
+
   Ltac2 Notation "ty_induction" h(ident) :=
     Control.enter (fun () =>
       let c := Control.hyp h in induction $c using ty_rect
@@ -80,6 +86,9 @@ Module TyTheories (Ty : TY).
 
 
   (** *** View *)
+
+  (** We map the type [ty] to the inductive type [tyv] in order to be able to
+      use the advantages of inductive definitions, to some extent. *)
 
   Inductive tyv : Set :=
     | tyv_prp : tyv
@@ -130,6 +139,9 @@ Module TyTheories (Ty : TY).
 
 
   (** *** Injection and discriminate *)
+
+  (** Since [ty] is a module parameter and not an inductive type, we have to
+      define these tactics manually *)
 
   Theorem ty_arr_inj {X Y A B} : ty_arr X Y = ty_arr A B -> X = A /\ Y = B.
   Proof.
