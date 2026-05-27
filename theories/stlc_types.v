@@ -8,11 +8,14 @@ Require Export tactics rlist.
 (*********************************************)
 
 
+(*****************)
 (** ** Interface *)
+(*****************)
 
 (** The theorems proved in this file can be applied to any module that
     implements this interface, that is to any theory of types that has at least
     the proposition type and an arrow type *)
+
 Module Type TY.
   Parameter ty : Set.
   Parameter ty_prp : ty.

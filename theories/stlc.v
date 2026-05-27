@@ -10,7 +10,7 @@ Require Export stlc_types.
 (** ** Interface *)
 (*****************)
 
-Declare Custom Entry stlc_tm.
+(** Interface for any STLC theory that uses de Bruijn levels *)
 
 Module Type STLC.
   Declare Module Ty : TY.
@@ -52,6 +52,8 @@ End STLC.
 (** ** Theories *)
 (****************)
 
+Declare Custom Entry stlc_tm.
+
 Module StlcTheories (Stlc : STLC).
   Export Stlc.
 
@@ -61,18 +63,27 @@ Module StlcTheories (Stlc : STLC).
   Definition tm_rec (P : tm -> Set) := tm_rect P.
   Definition tm_ind (P : tm -> Prop) := tm_rect P.
 
-  (** Tactics *)
+
+  (** *** Tactics *)
+
   Create HintDb tm.
   Hint Rewrite tm_rect_lvl tm_rect_app tm_rect_abs : tm.
   Hint Rewrite tm_rect_other using assumption : tm.
+
+  (** We use [tm_simpl] to simplify terms of type [tm], since there are no
+      transparent definitions that are simplified with reduction *)
   Ltac2 tm_simpl c := autorewrite @tm c; s_simpl c.
   Ltac2 Notation "tm_simpl" "in" "*" := Control.enter (fun () => tm_simpl all).
   Ltac2 Notation "tm_simpl" "in" h(ident) := tm_simpl (one_hyp h).
   Ltac2 Notation "tm_simpl" := tm_simpl goal.
+
   Ltac2 Notation "tm_induction" h(constr) := induction $h using tm_rect.
 
 
   (** *** View *)
+
+  (** We map the type [tm] to the inductive type [tmv] in order to be able to
+      use the advantages of inductive definitions, to some extent. *)
 
   Inductive tmv : Set :=
     | tmv_lvl : nat -> tmv
@@ -208,6 +219,7 @@ Module StlcTheories (Stlc : STLC).
 
   (** *** Other *)
 
+  (** The list containing the tm_lvls from [n] to [n+m] *)
   Definition lvl_seq n m := map tm_lvl (seq n m).
 
 
@@ -375,8 +387,11 @@ Module StlcTheories (Stlc : STLC).
     end.
 
   Ltac2 mutable htg_list () := [htg_lvl; htg_app; htg_abs1; htg_other].
+  (** Simplify a goal that is a typing relation *)
   Ltac2 has_type_goal () := first0 (htg_list ()).
 
+  (** Add to the context every typing relation that can be automatically derived
+      from the hypothesis h *)
   Ltac2 has_type h := i_iter ht_first [h].
   Ltac2 Notation "has_type" "in" h(ident) := has_type h.
   Ltac2 Notation "has_type" :=
@@ -415,6 +430,8 @@ Module StlcTheories (Stlc : STLC).
         * assumption.
   Qed.
 
+  (** We add this new result to the already defined typing tactics *)
+
   Ltac2 ht_fold_app h :=
     let c := Control.hyp h in
     let ht := Fresh.in_goal @Ht in let f := Fresh.in_goal @F in
@@ -430,6 +447,7 @@ Module StlcTheories (Stlc : STLC).
   (** ** Level manipulation *)
   (**************************)
 
+  (** Check if a proposition is true for any of the levels in a term *)
   Definition level_prop (P : nat -> Prop) t : Prop :=
     (fix fx P t :=
       match t with
@@ -459,7 +477,7 @@ Module StlcTheories (Stlc : STLC).
     level_prop (fun x => m <= x /\ x < (n + m)).
 
 
-  (** Apply "f" to all variables in the term "t" *)
+  (** Apply [f] to all variables in the term [t] *)
   Definition level_map (f : nat -> nat) (t : tm) : tm :=
     (fix fx f x :=
       match x with
@@ -494,10 +512,11 @@ Module StlcTheories (Stlc : STLC).
   Qed.
 
 
-  (** Apply "f" to all bound variables in the term "t" *)
+  (** Apply [f] to all bound variables in the term [t] *)
   Definition bound_level_map f m :=
     level_map (fun n => if decide (m <= n) then f n else n).
 
+  (** Increase all the bound variables in a term by 1 *)
   Notation lift := (bound_level_map S).
 
   Theorem has_type_bound_level_map1_h l m (c d : context) t T :
@@ -603,7 +622,9 @@ Module StlcTheories (Stlc : STLC).
   (** ** Substitution *)
   (********************)
 
-  (** Parallel substitution *)
+  (** Parallel substitution.  The terms in [l] and the resulting term are
+      interpreted in a context of length [m], while [t] is interpreted in a
+      context whose length is the length of [l]. *)
   Definition subst m l t :=
     (fix fx m l t :=
       match t with
@@ -706,6 +727,8 @@ Module StlcTheories (Stlc : STLC).
   Qed.
 
 
+  (** Replace the levels from [0] to [m-1] with themselves and replace the level
+      [m] with [s].  The term [s] is interpreted in a context of length [n]. *)
   Definition subst_last m n s := subst n (Build_rlist m tm_lvl +: s).
 
   Notation "[ n ; m | s ] t" := (subst_last n m s t)
@@ -763,16 +786,21 @@ Module StlcTheories (Stlc : STLC).
   (** ** Reduction *)
   (*****************)
 
+  (** [c] is a relation between terms, depending on the length of a context they
+      are interpreted in *)
   Definition preserves_type (c : nat -> tm -> tm -> Prop) :=
     forall (C : context) T a b, c C a b ->
     has_type C a T -> has_type C b T.
 
+  (** [step t1 t2] holds if [t2] is obtained by replacing a subterm [s1] of [t1]
+      with a term [s2] such that [c m s1 s2] holds *)
   Inductive step c m : tm -> tm -> Prop :=
     | step_conv a b : c m a b -> step c m a b
     | step_appL a b t : step c m a b -> step c m (tm_app a t) (tm_app b t)
     | step_appR s a b : step c m a b -> step c m (tm_app s a) (tm_app s b)
     | step_abs T a b : step c (S m) a b -> step c m (tm_abs T a) (tm_abs T b).
 
+  (** Reflexive, transitive (and symmetric) closure of step *)
   Definition reduces c m := rtc (step c m).
   Definition conv_eq c m := rtsc (step c m).
 
@@ -789,6 +817,9 @@ Module StlcTheories (Stlc : STLC).
       + assumption.
   Qed.
 
+
+  (** [beta_conv] and [eta_conv] below fulfill the role of the variable [c] in
+      the previous definitions *)
 
   Inductive beta_conv m : tm -> tm -> Prop :=
     beta_conv_intro T t s :
